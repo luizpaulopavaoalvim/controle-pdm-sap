@@ -1,0 +1,25 @@
+{
+  "name": "controle-inteligente-pdm-sap",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MVP web para controle, sugestao, validacao e geracao de descricoes SAP MM baseadas em PDM.",
+  "scripts": {
+    "postinstall": "npm install --prefix server && npm install --prefix client",
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "validate:dev": "node scripts/validate-dev.mjs",
+    "qa:functional": "node scripts/functional-qa.mjs",
+    "qa:import-flex": "node scripts/test-flex-material-import.mjs",
+    "reset:data": "node scripts/reset-real-data.mjs",
+    "migrate:postgres": "node scripts/migrate-postgres.mjs",
+    "check:postgres": "node scripts/check-postgres-persistence.mjs",
+    "server": "npm run dev --prefix server",
+    "client": "npm run dev --prefix client"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

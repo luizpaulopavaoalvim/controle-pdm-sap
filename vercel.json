@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "buildCommand": "npm install --prefix client && npm run build --prefix client",
+  "outputDirectory": "client/dist",
+  "framework": "vite",
+  "installCommand": "npm install --prefix client"
+}
