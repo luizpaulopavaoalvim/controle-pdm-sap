@@ -9,6 +9,24 @@ function parseAttributes(pdm = {}) {
   }
 }
 
+export function preparePdmsForMatching(pdms = []) {
+  return pdms.map((pdm) => {
+    const pdmName = pdm.nome_valido || pdm.nome_pdm || '';
+    const attributes = parseAttributes(pdm);
+    const attributeText = attributes.map((attr) => attr.attribute_name).join(' ');
+    const normalizedPdmName = normalize(pdmName).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return {
+      ...pdm,
+      _attributes: attributes,
+      _keywords: tokenize(pdm.palavra_chave || pdmName),
+      _pdmTokens: tokenize(`${pdmName} ${pdm.descricao_pdm || ''} ${pdm.tipo_material || ''} ${attributeText}`),
+      _pdmNameTokens: tokenize(pdmName),
+      _normalizedPdmName: normalizedPdmName,
+      _firstPdmTerm: normalizedPdmName.split(' ')[0]
+    };
+  });
+}
+
 function scoreMaterial(material, pdm) {
   const pdmName = pdm.nome_valido || pdm.nome_pdm || '';
   const briefText = material.descricao || '';
@@ -28,14 +46,14 @@ function scoreMaterial(material, pdm) {
   const briefTokens = new Set(tokenize(briefText));
   const longTokens = new Set(tokenize(longText));
   const tokens = new Set(tokenize(materialText));
-  const keywords = tokenize(pdm.palavra_chave || pdmName);
-  const attributeText = parseAttributes(pdm).map((attr) => attr.attribute_name).join(' ');
-  const pdmTokens = tokenize(`${pdmName} ${pdm.descricao_pdm || ''} ${pdm.tipo_material || ''} ${attributeText}`);
-  const pdmNameTokens = tokenize(pdmName);
+  const attributes = pdm._attributes || parseAttributes(pdm);
+  const keywords = pdm._keywords || tokenize(pdm.palavra_chave || pdmName);
+  const pdmTokens = pdm._pdmTokens || tokenize(`${pdmName} ${pdm.descricao_pdm || ''} ${pdm.tipo_material || ''} ${attributes.map((attr) => attr.attribute_name).join(' ')}`);
+  const pdmNameTokens = pdm._pdmNameTokens || tokenize(pdmName);
   const normalizedBrief = normalize(briefText).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizedLong = normalize(longText).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizedMaterial = normalize(materialText);
-  const normalizedPdmName = normalize(pdmName).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalizedPdmName = pdm._normalizedPdmName || normalize(pdmName).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   let points = 0;
   const reasons = [];
@@ -81,7 +99,7 @@ function scoreMaterial(material, pdm) {
     if (tokens.has(term)) points += 10;
   }
 
-  const matchedAttributes = parseAttributes(pdm)
+  const matchedAttributes = attributes
     .map((attr) => normalize(attr.attribute_name))
     .filter((attrName) => attrName && normalizedMaterial.includes(attrName));
   if (matchedAttributes.length) {
@@ -94,7 +112,7 @@ function scoreMaterial(material, pdm) {
     reasons.push('tipo de material compativel');
   }
 
-  const firstPdmTerm = normalizedPdmName.split(' ')[0];
+  const firstPdmTerm = pdm._firstPdmTerm || normalizedPdmName.split(' ')[0];
   if (firstPdmTerm && normalizedMaterial.includes(firstPdmTerm)) {
     points += 14;
     reasons.push('termo principal do PDM encontrado no material');
@@ -103,8 +121,8 @@ function scoreMaterial(material, pdm) {
   return { score: points, confidence: Math.min(points, 98), reasons };
 }
 
-export async function suggestForMaterial(material) {
-  const pdms = await db.prepare('SELECT * FROM pdms').all();
+export async function suggestForMaterial(material, preparedPdms = null) {
+  const pdms = preparedPdms || preparePdmsForMatching(await db.prepare('SELECT * FROM pdms').all());
   const fallbackPdm = pdms.find((pdm) => String(pdm.id_pdm) === '1');
   let best = null;
 

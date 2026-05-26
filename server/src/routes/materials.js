@@ -1,6 +1,6 @@
 import express from 'express';
 import db from '../db.js';
-import { suggestForMaterial } from '../services/classifier.js';
+import { preparePdmsForMatching, suggestForMaterial } from '../services/classifier.js';
 import { generateFinalTexts } from '../services/text.js';
 import { describeColumns, isEmptyRow, mapRowFlexible, readWorkbookRows } from '../services/importExport.js';
 import { addHistory, recordChanges } from '../services/history.js';
@@ -54,20 +54,22 @@ function normalizeMaterial(row = {}) {
   };
 }
 
-async function insertOrUpdateMaterial(rawMaterial, user = 'sistema') {
+async function buildMaterialPayload(rawMaterial, user = 'sistema', preparedPdms = null) {
   const material = normalizeMaterial(rawMaterial);
-  const suggestion = await suggestForMaterial(material);
+  const suggestion = await suggestForMaterial(material, preparedPdms);
   let status = material.status || suggestion.status;
   if (material.import_error && status === 'OK') status = 'VALIDAR';
   const responsible = typeof user === 'object' ? user.username : user;
-  const payload = {
+  return {
     ...material,
     ...suggestion,
     status,
     responsible,
     final_result: ['OK', 'APROVADO', 'CONCLUIDO'].includes(status) ? 1 : 0
   };
+}
 
+async function upsertMaterialPayload(payload) {
   await db.prepare(`
     INSERT INTO materials (
       codigo, descricao, texto_longo_original, centro, deposito, tipo_material, fabricante, part_number,
@@ -119,6 +121,80 @@ async function insertOrUpdateMaterial(rawMaterial, user = 'sistema') {
       modified_at=CURRENT_TIMESTAMP,
       updated_at=CURRENT_TIMESTAMP
   `).run(payload);
+}
+
+async function bulkUpsertMaterialPayloads(payloads) {
+  if (!payloads.length) return;
+  if (db.client !== 'postgres') {
+    for (const payload of payloads) await upsertMaterialPayload(payload);
+    return;
+  }
+
+  const fields = [
+    'codigo', 'descricao', 'texto_longo_original', 'centro', 'deposito', 'tipo_material', 'fabricante', 'part_number',
+    'modelo', 'dimensao', 'material', 'aplicacao', 'observacao', 'suggested_pdm_id',
+    'suggested_pdm_name', 'confidence', 'suggestion_reason', 'status', 'responsible',
+    'short_pt', 'long_pt', 'short_en', 'long_en', 'final_result',
+    'source_file', 'import_batch', 'row_number', 'import_order', 'import_error',
+    'modified_by_user_id', 'modified_by_name', 'modified_by_role'
+  ];
+  const chunkSize = 300;
+  for (let start = 0; start < payloads.length; start += chunkSize) {
+    const chunk = payloads.slice(start, start + chunkSize);
+    const values = [];
+    const placeholders = chunk.map((payload, rowIndex) => {
+      const rowPlaceholders = fields.map((field, fieldIndex) => {
+        values.push(payload[field]);
+        return `$${rowIndex * fields.length + fieldIndex + 1}`;
+      });
+      return `(${rowPlaceholders.join(', ')})`;
+    });
+
+    await db.query(`
+      INSERT INTO materials (${fields.join(', ')})
+      VALUES ${placeholders.join(', ')}
+      ON CONFLICT(codigo) DO UPDATE SET
+        descricao=excluded.descricao,
+        texto_longo_original=excluded.texto_longo_original,
+        centro=excluded.centro,
+        deposito=excluded.deposito,
+        tipo_material=excluded.tipo_material,
+        fabricante=excluded.fabricante,
+        part_number=excluded.part_number,
+        modelo=excluded.modelo,
+        dimensao=excluded.dimensao,
+        material=excluded.material,
+        aplicacao=excluded.aplicacao,
+        observacao=excluded.observacao,
+        suggested_pdm_id=excluded.suggested_pdm_id,
+        suggested_pdm_name=excluded.suggested_pdm_name,
+        confidence=excluded.confidence,
+        suggestion_reason=excluded.suggestion_reason,
+        status=excluded.status,
+        responsible=excluded.responsible,
+        short_pt=excluded.short_pt,
+        long_pt=excluded.long_pt,
+        short_en=excluded.short_en,
+        long_en=excluded.long_en,
+        final_result=excluded.final_result,
+        source_file=excluded.source_file,
+        import_batch=excluded.import_batch,
+        row_number=excluded.row_number,
+        import_order=excluded.import_order,
+        import_error=excluded.import_error,
+        modified_by_user_id=excluded.modified_by_user_id,
+        modified_by_name=excluded.modified_by_name,
+        modified_by_role=excluded.modified_by_role,
+        modified_at=CURRENT_TIMESTAMP,
+        updated_at=CURRENT_TIMESTAMP
+    `, values);
+  }
+}
+
+async function insertOrUpdateMaterial(rawMaterial, user = 'sistema') {
+  const payload = await buildMaterialPayload(rawMaterial, user);
+  await upsertMaterialPayload(payload);
+  const material = normalizeMaterial(rawMaterial);
   await addHistory({ codigo: material.codigo, field: 'importacao', oldValue: '', newValue: 'Material importado/processado', user, action: 'Material importado', entity: 'Material' });
   return payload;
 }
@@ -218,6 +294,8 @@ router.post('/import', async (req, res) => {
   const user = actor;
   const fileName = req.file.originalname || 'materiais.xlsx';
   const batchId = `${Date.now()}`;
+  const preparedPdms = preparePdmsForMatching(await db.prepare('SELECT * FROM pdms').all());
+  const payloads = [];
 
   await db.prepare('DELETE FROM history').run();
   await db.prepare('DELETE FROM materials').run();
@@ -250,9 +328,11 @@ router.post('/import', async (req, res) => {
     }
     if (!hasAnyText) row.import_error = 'Texto breve e Texto Longo ausentes';
 
-    await insertOrUpdateMaterial(row, user);
+    payloads.push(await buildMaterialPayload(row, user, preparedPdms));
     imported += 1;
   }
+
+  await bulkUpsertMaterialPayloads(payloads);
 
   await setSettings({
     latest_material_file: fileName,
@@ -261,6 +341,14 @@ router.post('/import', async (req, res) => {
     latest_material_total_rows: rows.length,
     latest_material_imported_rows: imported,
     latest_material_ignored_rows: ignored
+  });
+  await addHistory({
+    user: actor,
+    action: 'Material importado',
+    entity: 'Material',
+    field: 'importacao',
+    newValue: `${imported} material(is) importado(s)/processado(s)`,
+    note: `Arquivo ${fileName}; lote ${batchId}; ignorados ${ignored}`
   });
 
   const summary = { read: rows.length, imported, ignored, ignoredReasons, errors, columns, fileName, batchId };

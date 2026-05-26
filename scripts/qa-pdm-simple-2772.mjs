@@ -84,6 +84,7 @@ try {
   const pdmFile = path.join(qaDir, 'PDMs Cadastrados KlassmattV2.xlsx');
   const materialFile = path.join(qaDir, 'materiais-match-pdm-real.xlsx');
   const totalPdms = 2772;
+  const totalMaterials = 2005;
 
   const registeredName = `Consultor PDM ${suffix}`;
   const suggestion = await (await api(`/auth/suggest-login?name=${encodeURIComponent(registeredName)}`)).json();
@@ -121,35 +122,47 @@ try {
     throw new Error(`PDM ABRACADEIRA nao encontrado apos importacao: ${JSON.stringify(pdmQuery.slice(0, 3))}`);
   }
 
-  makeWorkbook(materialFile, [
-    {
-      Codigo: 'MAT-PDM-001',
-      'Texto breve': 'ABRACADEIRA INOX 1 POL',
-      'Texto Longo': 'ABRACADEIRA INOX PARA TUBO; PN ABR-001; FAB METALQA'
-    },
-    {
-      Codigo: 'MAT-PDM-002',
-      'Texto breve': 'ABAFADOR RUIDO CONCHA',
-      'Texto Longo': 'ABAFADOR RUIDO TIPO CONCHA; PN ABA-002; FAB SAFETYQA'
-    },
-    {
-      Codigo: 'MAT-PDM-003',
-      'Texto breve': 'ITEM SEM PADRAO CONHECIDO',
-      'Texto Longo': 'DESCRICAO SEM TERMO EXISTENTE NA BASE'
+  const materialRows = Array.from({ length: totalMaterials }, (_, index) => {
+    const number = String(index + 1).padStart(5, '0');
+    const kind = index % 3;
+    if (kind === 0) {
+      return {
+        Codigo: `MAT-PDM-${number}`,
+        'Texto breve': `ABRACADEIRA INOX ${number}`,
+        'Texto Longo': `ABRACADEIRA INOX PARA TUBO; PN ABR-${number}; FAB METALQA`
+      };
     }
-  ], 'Planilha1');
+    if (kind === 1) {
+      return {
+        Codigo: `MAT-PDM-${number}`,
+        'Texto breve': `ABAFADOR RUIDO CONCHA ${number}`,
+        'Texto Longo': `ABAFADOR RUIDO TIPO CONCHA; PN ABA-${number}; FAB SAFETYQA`
+      };
+    }
+    return {
+      Codigo: `MAT-PDM-${number}`,
+      'Texto breve': `ABAIXADOR LINGUA MADEIRA ${number}`,
+      'Texto Longo': `ABAIXADOR LINGUA MADEIRA DESCARTAVEL; PN ABL-${number}; FAB MEDQA`
+    };
+  });
+  makeWorkbook(materialFile, materialRows, 'Planilha1');
 
   const materialImport = await upload('/materials/import', materialFile, consultant);
-  if (materialImport.read !== 3 || materialImport.imported !== 3 || materialImport.ignored !== 0) {
+  if (materialImport.read !== totalMaterials || materialImport.imported !== totalMaterials || materialImport.ignored !== 0) {
     throw new Error(`Importacao materiais falhou: ${JSON.stringify(materialImport)}`);
   }
 
   const materials = await (await api('/materials')).json();
-  const first = materials.find((row) => row.codigo === 'MAT-PDM-001');
-  const second = materials.find((row) => row.codigo === 'MAT-PDM-002');
-  const third = materials.find((row) => row.codigo === 'MAT-PDM-003');
-  if (first?.suggested_pdm_id !== '20016' || second?.suggested_pdm_id !== '20015' || third?.suggested_pdm_id !== '1') {
+  if (materials.length !== totalMaterials) throw new Error(`Listagem retornou ${materials.length}, esperado ${totalMaterials}`);
+  const first = materials.find((row) => row.codigo === 'MAT-PDM-00001');
+  const second = materials.find((row) => row.codigo === 'MAT-PDM-00002');
+  const third = materials.find((row) => row.codigo === 'MAT-PDM-00003');
+  const last = materials[materials.length - 1];
+  if (first?.suggested_pdm_id !== '20016' || second?.suggested_pdm_id !== '20015' || third?.suggested_pdm_id !== '17379') {
     throw new Error(`Match PDM inconsistente: ${JSON.stringify(materials.map((row) => ({ codigo: row.codigo, pdm: row.suggested_pdm_id, reason: row.suggestion_reason })))}`);
+  }
+  if (last.codigo !== 'MAT-PDM-02005' || last.row_number !== 2006) {
+    throw new Error(`Ultima linha perdeu ordem/vinculo: ${JSON.stringify(last)}`);
   }
 
   await api(`/materials/${first.id}/generate`, {
@@ -159,7 +172,7 @@ try {
   });
 
   const dashboard = await (await api('/dashboard')).json();
-  if (dashboard.cards.total !== 3 || dashboard.latestImport.file_name !== path.basename(materialFile)) {
+  if (dashboard.cards.total !== totalMaterials || dashboard.latestImport.file_name !== path.basename(materialFile)) {
     throw new Error(`Dashboard inconsistente: ${JSON.stringify(dashboard)}`);
   }
 
@@ -167,7 +180,7 @@ try {
   const exportComplete = await api(`/export/complete?user=${encodeURIComponent(consultant)}`);
   const finalRows = XLSX.utils.sheet_to_json(XLSX.read(Buffer.from(await exportFinal.arrayBuffer())).Sheets['Resultado Final']);
   const completeRows = XLSX.utils.sheet_to_json(XLSX.read(Buffer.from(await exportComplete.arrayBuffer())).Sheets['Base Completa']);
-  if (!finalRows.length || completeRows.length !== 3) {
+  if (finalRows.length !== totalMaterials || completeRows.length !== totalMaterials) {
     throw new Error(`Exportacao inconsistente: final=${finalRows.length}, completa=${completeRows.length}`);
   }
 
@@ -189,7 +202,7 @@ try {
     },
     pdmStatus,
     materialImport,
-    matches: materials.map((row) => ({
+    firstMatches: materials.slice(0, 3).map((row) => ({
       codigo: row.codigo,
       pdm: row.suggested_pdm_id,
       nome: row.suggested_pdm_name,
@@ -197,6 +210,11 @@ try {
       confidence: row.confidence,
       reason: row.suggestion_reason
     })),
+    lastRow: {
+      codigo: last.codigo,
+      pdm: last.suggested_pdm_id,
+      row_number: last.row_number
+    },
     dashboard: dashboard.cards,
     exportFinalRows: finalRows.length,
     exportCompleteRows: completeRows.length
