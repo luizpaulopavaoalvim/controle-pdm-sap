@@ -1,6 +1,6 @@
 import express from 'express';
 import db from '../db.js';
-import { describeColumns, isEmptyRow, mapRowFlexible, normalizeHeader, readWorkbookRows } from '../services/importExport.js';
+import { describeColumns, isEmptyRow, mapRowFlexible, readWorkbookRows } from '../services/importExport.js';
 import { getSetting, setSettings } from '../services/settings.js';
 import { actorPayload, requireOperationalActor } from '../services/actors.js';
 import { addHistory } from '../services/history.js';
@@ -188,7 +188,7 @@ router.post('/import', async (req, res) => {
     await db.prepare('DELETE FROM pdms').run();
   }
 
-  const rows = readWorkbookRows(req.file.path, 'Parte1');
+  const rows = readWorkbookRows(req.file.path);
   const columns = describeColumns(rows);
   console.log('[import-pdms] colunas originais:', columns.original);
   console.log('[import-pdms] colunas normalizadas:', columns.normalized);

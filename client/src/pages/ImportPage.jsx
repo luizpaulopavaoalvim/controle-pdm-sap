@@ -10,7 +10,6 @@ export function ImportPdm({ user }) {
   async function loadStatus() {
     const { data } = await api.get('/pdms/status');
     setStatus(data);
-    if (data.count > 1) setMode('keep');
   }
 
   useEffect(() => {
@@ -50,7 +49,7 @@ export function ImportPdm({ user }) {
       </section>
       <UploadPanel
         title="Base de PDM"
-        description="Aba esperada: Parte1 ou a primeira aba do arquivo. Informe Id Padrao e Nome Valido; qualquer coluna extra sera ignorada."
+        description="O sistema usa automaticamente a primeira aba, incluindo Planilha1. Informe Id Padrao e Nome Valido; qualquer coluna extra sera ignorada."
         onUpload={async (file) => {
           const form = new FormData();
           form.append('file', file);

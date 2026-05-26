@@ -10,6 +10,7 @@
     "validate:dev": "node scripts/validate-dev.mjs",
     "qa:functional": "node scripts/functional-qa.mjs",
     "qa:large": "node scripts/qa-large-import.mjs",
+    "qa:pdm-simple": "node scripts/qa-pdm-simple-2772.mjs",
     "qa:import-flex": "node scripts/test-flex-material-import.mjs",
     "reset:data": "node scripts/reset-real-data.mjs",
     "migrate:postgres": "node scripts/migrate-postgres.mjs",
