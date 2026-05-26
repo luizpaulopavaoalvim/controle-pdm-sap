@@ -1,6 +1,6 @@
 import express from 'express';
 import db from '../db.js';
-import { describeColumns, isEmptyRow, mapRowFlexible, readWorkbookRows } from '../services/importExport.js';
+import { isEmptyRow, mapRowFlexible, readWorkbookRowsByDetectedHeader } from '../services/importExport.js';
 import { getSetting, setSettings } from '../services/settings.js';
 import { actorPayload, requireOperationalActor } from '../services/actors.js';
 import { addHistory } from '../services/history.js';
@@ -82,6 +82,55 @@ async function upsertPdm(row) {
   `);
   for (const attr of attrs) {
     await insertAttr.run(row.id_pdm, attr.dt_column, attr.attribute_order, attr.attribute_name);
+  }
+}
+
+async function bulkUpsertPdms(rows) {
+  if (!rows.length) return;
+  if (db.client !== 'postgres') {
+    for (const row of rows) await upsertPdm(row);
+    return;
+  }
+
+  const fields = [
+    'id_padrao', 'nome_valido', 'id_pdm', 'nome_pdm', 'descricao_pdm', 'tipo_material', 'palavra_chave',
+    'atributos_dt', 'estrutura_texto_breve_pt', 'estrutura_texto_longo_pt', 'estrutura_texto_breve_en',
+    'estrutura_texto_longo_en', 'observacao', 'modified_by_user_id', 'modified_by_name', 'modified_by_role'
+  ];
+  const chunkSize = 500;
+  for (let start = 0; start < rows.length; start += chunkSize) {
+    const chunk = rows.slice(start, start + chunkSize);
+    const values = [];
+    const placeholders = chunk.map((row, rowIndex) => {
+      const rowPlaceholders = fields.map((field, fieldIndex) => {
+        values.push(row[field]);
+        return `$${rowIndex * fields.length + fieldIndex + 1}`;
+      });
+      return `(${rowPlaceholders.join(', ')})`;
+    });
+
+    await db.query(`
+      INSERT INTO pdms (${fields.join(', ')})
+      VALUES ${placeholders.join(', ')}
+      ON CONFLICT(id_pdm) DO UPDATE SET
+        id_padrao=excluded.id_padrao,
+        nome_valido=excluded.nome_valido,
+        atributos_dt=excluded.atributos_dt,
+        nome_pdm=excluded.nome_pdm,
+        descricao_pdm=excluded.descricao_pdm,
+        tipo_material=excluded.tipo_material,
+        palavra_chave=excluded.palavra_chave,
+        estrutura_texto_breve_pt=excluded.estrutura_texto_breve_pt,
+        estrutura_texto_longo_pt=excluded.estrutura_texto_longo_pt,
+        estrutura_texto_breve_en=excluded.estrutura_texto_breve_en,
+        estrutura_texto_longo_en=excluded.estrutura_texto_longo_en,
+        observacao=excluded.observacao,
+        modified_by_user_id=excluded.modified_by_user_id,
+        modified_by_name=excluded.modified_by_name,
+        modified_by_role=excluded.modified_by_role,
+        modified_at=CURRENT_TIMESTAMP,
+        updated_at=CURRENT_TIMESTAMP
+    `, values);
   }
 }
 
@@ -188,22 +237,41 @@ router.post('/import', async (req, res) => {
     await db.prepare('DELETE FROM pdms').run();
   }
 
-  const rows = readWorkbookRows(req.file.path);
-  const columns = describeColumns(rows);
-  console.log('[import-pdms] colunas originais:', columns.original);
-  console.log('[import-pdms] colunas normalizadas:', columns.normalized);
-  console.log('[import-pdms] total de linhas lidas:', rows.length);
-
   const mapping = {
     id_padrao: ['Id Padrao', 'ID PADRAO', 'id_padrao', 'ID_PADRAO', 'ID_PDM', 'ID PDM'],
     nome_valido: ['Nome Valido', 'NOME VALIDO', 'nome_valido', 'NOME_VALIDO', 'Nome_PDM', 'NOME_PDM', 'Nome PDM']
   };
+
+  const detected = readWorkbookRowsByDetectedHeader(req.file.path, mapping);
+  const rows = detected.rows;
+  const columns = detected.columns;
+  console.log('[import-pdms] colunas originais:', columns.original);
+  console.log('[import-pdms] colunas normalizadas:', columns.normalized);
+  console.log('[import-pdms] total de linhas lidas:', rows.length);
+  console.log('[import-pdms] aba usada:', detected.sheetName);
+  console.log('[import-pdms] linha do cabecalho:', detected.headerRowNumber);
+
+  if (detected.error) {
+    return res.status(400).json({
+      message: 'Cabecalho obrigatorio nao encontrado. Use Id Padrao e Nome Valido na primeira aba da planilha.',
+      read: 0,
+      imported: 0,
+      ignored: 0,
+      totalAttributes: 0,
+      ignoredReasons: { [detected.error]: 1 },
+      errors: [detected.error],
+      columns,
+      preview: [],
+      status: await pdmStatus()
+    });
+  }
 
   let imported = 0;
   let ignored = 0;
   let totalAttributes = 0;
   const errors = [];
   const ignoredReasons = {};
+  const pdmsToSave = [];
 
   for (const [index, rawRow] of rows.entries()) {
     if (isEmptyRow(rawRow)) {
@@ -224,17 +292,27 @@ router.post('/import', async (req, res) => {
       continue;
     }
 
-    try {
-      await upsertPdm(row);
-      await addHistory({ user: actor, action: 'PDM importado', entity: 'PDM', field: 'pdm', newValue: row.nome_pdm, note: `Linha ${index + 2}` });
-      totalAttributes += attributes.length;
-      imported += 1;
-    } catch (error) {
-      ignored += 1;
-      const reason = error.message || 'Erro ao salvar PDM';
-      ignoredReasons[reason] = (ignoredReasons[reason] || 0) + 1;
-      errors.push(`Linha ${index + 2}: ${reason}`);
-    }
+    pdmsToSave.push(row);
+    totalAttributes += attributes.length;
+    imported += 1;
+  }
+
+  try {
+    await bulkUpsertPdms(pdmsToSave);
+    if (mode === 'replace') await db.prepare('DELETE FROM pdm_attributes').run();
+  } catch (error) {
+    return res.status(500).json({
+      message: `Erro ao salvar base PDM: ${error.message}`,
+      read: rows.length,
+      imported: 0,
+      ignored: rows.length,
+      totalAttributes: 0,
+      ignoredReasons: { [error.message]: rows.length },
+      errors: [error.message],
+      columns,
+      preview: [],
+      status: await pdmStatus()
+    });
   }
 
   await ensureFallbackPdm();
@@ -246,13 +324,33 @@ router.post('/import', async (req, res) => {
     latest_pdm_attribute_count: savedAttributeCount,
     latest_pdm_file: req.file.originalname || ''
   });
+  await addHistory({
+    user: actor,
+    action: 'PDM importado',
+    entity: 'PDM',
+    field: 'base_pdm',
+    newValue: `${imported} PDMs importados`,
+    note: `Arquivo ${req.file.originalname || ''}; aba ${detected.sheetName}; cabecalho linha ${detected.headerRowNumber}`
+  });
 
   const previewRows = await db.prepare('SELECT * FROM pdms ORDER BY updated_at DESC LIMIT 10').all();
   const preview = previewRows.map((row) => {
     const attrs = parseAttrs(row);
     return { id_padrao: row.id_padrao, nome_valido: row.nome_valido, attribute_count: attrs.length, attributes: attrs };
   });
-  const summary = { read: rows.length, imported, ignored, totalAttributes, ignoredReasons, errors, columns, preview, status: await pdmStatus() };
+  const summary = {
+    read: rows.length,
+    imported,
+    ignored,
+    totalAttributes,
+    ignoredReasons,
+    errors,
+    columns,
+    sheetName: detected.sheetName,
+    headerRowNumber: detected.headerRowNumber,
+    preview,
+    status: await pdmStatus()
+  };
   console.log('[import-pdms] resumo:', summary);
   res.json(summary);
 });

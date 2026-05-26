@@ -140,6 +140,10 @@ const db = {
     sqlite.exec(sql);
     persist();
   },
+  async query(sql, params = []) {
+    if (!usePostgres) throw new Error('db.query esta disponivel apenas para PostgreSQL');
+    return pool.query(sql, params);
+  },
   prepare(sql) {
     return usePostgres ? pgStatement(sql) : sqliteStatement(sql);
   }
