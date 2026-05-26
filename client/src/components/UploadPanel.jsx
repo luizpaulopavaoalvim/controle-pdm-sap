@@ -1,7 +1,7 @@
 import { Upload } from 'lucide-react';
 import React, { useState } from 'react';
 
-export default function UploadPanel({ title, description, onUpload }) {
+export default function UploadPanel({ title, description, onUpload, processingLabel = 'Importando...' }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -50,7 +50,7 @@ export default function UploadPanel({ title, description, onUpload }) {
           className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
         />
         <button className="rounded-md bg-sap-blue px-4 py-2 text-sm font-bold text-white disabled:opacity-60" disabled={loading || !file}>
-          {loading ? 'Importando...' : 'Importar Excel'}
+          {loading ? processingLabel : 'Importar Excel'}
         </button>
       </div>
       {message && <p className="mt-3 text-sm font-semibold text-slate-700">{message}</p>}
@@ -58,7 +58,7 @@ export default function UploadPanel({ title, description, onUpload }) {
         <div className="mt-5 overflow-auto rounded-md border border-slate-200">
           <table className="min-w-full">
             <thead>
-              <tr><th>Id Padrão</th><th>Nome Válido</th><th>Atributos</th><th>Lista de atributos técnicos</th></tr>
+              <tr><th>Id Padrao</th><th>Nome Valido</th><th>Atributos</th><th>Lista de atributos tecnicos</th></tr>
             </thead>
             <tbody>
               {preview.map((row) => (

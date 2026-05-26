@@ -88,18 +88,18 @@ try {
   const materialFile = path.join(qaDir, 'Materiais Prioridade Alta.xlsx');
 
   makeWorkbook(pdmFile, [
-    { 'Id Padrão': '1', 'Nome Válido': '(NÃO-PADRONIZADO)', DT_01: 'Texto longo', DT_02: 'Texto curto' },
-    { 'Id Padrão': pdmId, 'Nome Válido': `BOTA SEGURANCA ${uniqueToken}`, DT_01: 'MATERIAL CORPO', DT_02: 'COR CORPO', DT_03: 'TAMANHO BOTA', DT_04: 'TIPO CANO', DT_05: 'CARACTERISTICAS ADICIONAIS' }
+    { 'Id Padrao': '1', 'Nome Valido': '(NAO-PADRONIZADO)' },
+    { 'Id Padrao': pdmId, 'Nome Valido': `BOTA SEGURANCA ${uniqueToken}` }
   ], 'Parte1');
 
   makeWorkbook(materialFile, [
     {
-      'Código': materialCode,
+      'Codigo': materialCode,
       'Texto Breve': `BOTA SEGURANCA FIRE1015090-35 ${uniqueToken}`,
       'Texto Longo': `BOTA SEGURANCA ${uniqueToken}; MATERIAL CORPO: COURO; COR CORPO: PRETO; TAMANHO BOTA: 35; TIPO CANO: LONGO; CARACTERISTICAS ADICIONAIS: BOTA BRIGADISTA; PN FIRE1015090-35; FAB GUARTELA`
     },
     {
-      'Código': `${materialCode}B`,
+      'Codigo': `${materialCode}B`,
       'Texto Breve': `BOTA SEGURANCA RESERVA ${uniqueToken}`,
       'Texto Longo': `BOTA SEGURANCA ${uniqueToken}; MATERIAL CORPO: COURO; COR CORPO: PRETO; PN RESERVA-01; FAB GUARTELA`
     }
@@ -120,7 +120,7 @@ try {
   const adminBlocked = await fetch('http://127.0.0.1:4000/api/export/final?user=admin');
   const pdmImport = await upload('/pdms/import', pdmFile, consultant);
   const pdmStatus = await (await api('/pdms/status')).json();
-  if (pdmImport.totalAttributes < 7 || pdmStatus.count < 2) throw new Error(`PDMs/atributos nao importados: ${JSON.stringify({ pdmImport, pdmStatus })}`);
+  if (pdmImport.imported < 2 || pdmStatus.count < 2) throw new Error(`PDMs simples nao importados: ${JSON.stringify({ pdmImport, pdmStatus })}`);
 
   const materialImport = await upload('/materials/import', materialFile, consultant);
   const allRows = await (await api('/materials')).json();

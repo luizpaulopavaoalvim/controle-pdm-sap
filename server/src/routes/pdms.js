@@ -88,7 +88,7 @@ async function upsertPdm(row) {
 async function ensureFallbackPdm() {
   const exists = await db.prepare("SELECT id FROM pdms WHERE id_pdm = '1'").get();
   if (exists) return;
-  await upsertPdm(normalizePdm({ id_padrao: '1', nome_valido: '(NÃO-PADRONIZADO)', observacao: 'Fallback automatico.' }, []));
+  await upsertPdm(normalizePdm({ id_padrao: '1', nome_valido: '(NAO-PADRONIZADO)', observacao: 'Fallback automatico.' }, []));
 }
 
 async function pdmStatus() {
@@ -195,8 +195,8 @@ router.post('/import', async (req, res) => {
   console.log('[import-pdms] total de linhas lidas:', rows.length);
 
   const mapping = {
-    id_padrao: ['Id Padrão', 'ID PADRÃO', 'Id Padrao', 'ID PADRAO', 'ID_PADRAO', 'ID_PDM', 'ID PDM'],
-    nome_valido: ['Nome Válido', 'NOME VÁLIDO', 'Nome Valido', 'NOME VALIDO', 'NOME_VALIDO', 'Nome_PDM', 'NOME_PDM', 'Nome PDM']
+    id_padrao: ['Id Padrao', 'ID PADRAO', 'id_padrao', 'ID_PADRAO', 'ID_PDM', 'ID PDM'],
+    nome_valido: ['Nome Valido', 'NOME VALIDO', 'nome_valido', 'NOME_VALIDO', 'Nome_PDM', 'NOME_PDM', 'Nome PDM']
   };
 
   let imported = 0;
@@ -213,21 +213,7 @@ router.post('/import', async (req, res) => {
     }
 
     const mapped = mapRowFlexible(rawRow, mapping);
-    const attributes = Object.entries(rawRow)
-      .map(([column, value]) => ({ column, normalized: normalizeHeader(column), value: String(value ?? '').trim() }))
-      .filter((item) => /^dt_\d{1,3}$/.test(item.normalized.replace(' ', '_')))
-      .map((item) => ({
-        dt_column: item.column.trim(),
-        dt_number: Number(item.normalized.replace(/\D/g, '')),
-        attribute_name: item.value
-      }))
-      .filter((item) => item.attribute_name && item.attribute_name !== '-')
-      .sort((a, b) => a.dt_number - b.dt_number)
-      .map((item, attrIndex) => ({
-        dt_column: item.dt_column,
-        attribute_order: attrIndex + 1,
-        attribute_name: item.attribute_name
-      }));
+    const attributes = [];
 
     const row = normalizePdm({ ...mapped, ...actorPayload(actor) }, attributes);
     if (!row.id_pdm || !row.nome_pdm) {

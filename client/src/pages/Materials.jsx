@@ -10,10 +10,13 @@ export default function Materials({ user, finalOnly = false }) {
   const [rows, setRows] = useState([]);
   const [filters, setFilters] = useState({ status: '', pdm: '', responsible: '', centro: '', tipo: '', q: '', minConfidence: 0 });
   const [editing, setEditing] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
 
   async function load() {
     const { data } = await api.get('/materials', { params: finalOnly ? { ...filters, status: '' } : filters });
     setRows(finalOnly ? data.filter((row) => row.final_result || ['OK', 'APROVADO', 'CONCLUIDO'].includes(row.status)) : data);
+    setPage(1);
   }
 
   useEffect(() => { load(); }, []);
@@ -35,6 +38,10 @@ export default function Materials({ user, finalOnly = false }) {
     setEditing(null);
     await load();
   }
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <>
@@ -91,7 +98,7 @@ export default function Materials({ user, finalOnly = false }) {
             )}
           </thead>
           <tbody>
-            {rows.map((row) => finalOnly ? (
+            {pagedRows.map((row) => finalOnly ? (
               <tr key={row.id} onDoubleClick={() => setEditing(row)} title="De duplo clique para editar os textos antes da exportacao">
                 <td className="font-bold text-sap-blue">{row.codigo}</td>
                 <td className="font-semibold">{row.short_pt}</td>
@@ -139,6 +146,39 @@ export default function Materials({ user, finalOnly = false }) {
           </tbody>
         </table>
       </div>
+      {rows.length > 0 && (
+        <div className="mt-3 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm md:flex-row md:items-center md:justify-between">
+          <div className="font-semibold text-slate-600">
+            Exibindo {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, rows.length)} de {rows.length} registros
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={pageSize}
+              onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}
+              className="rounded-md border border-slate-300 px-2 py-1 font-semibold"
+            >
+              {[100, 250, 500].map((size) => <option key={size} value={size}>{size} por pagina</option>)}
+            </select>
+            <button
+              type="button"
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              disabled={currentPage <= 1}
+              className="rounded-md border border-slate-300 px-3 py-1 font-bold disabled:opacity-50"
+            >
+              Anterior
+            </button>
+            <span className="font-bold text-sap-dark">Pagina {currentPage} de {totalPages}</span>
+            <button
+              type="button"
+              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              disabled={currentPage >= totalPages}
+              className="rounded-md border border-slate-300 px-3 py-1 font-bold disabled:opacity-50"
+            >
+              Proxima
+            </button>
+          </div>
+        </div>
+      )}
       {editing && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/40 p-4">
           <form onSubmit={saveEdit} className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg bg-white p-5 shadow-fiori">

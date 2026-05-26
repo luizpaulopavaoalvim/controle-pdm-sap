@@ -20,9 +20,9 @@ export default function App() {
   const content = useMemo(() => {
     if (!user) return null;
     if (isAdmin && active !== 'dashboard') {
-      return <Dashboard message="Acesso somente leitura. Perfil autorizado apenas para acompanhamento do dashboard." />;
+      return <Dashboard user={user} message="Acesso somente leitura. Perfil autorizado apenas para acompanhamento do dashboard." />;
     }
-    if (active === 'dashboard') return <Dashboard />;
+    if (active === 'dashboard') return <Dashboard user={user} />;
     if (active === 'import-pdm') return <ImportPdm user={user} />;
     if (active === 'import-materials') return <ImportMaterials user={user} />;
     if (active === 'materials') return <Materials key="classification" user={user} />;
@@ -30,7 +30,7 @@ export default function App() {
     if (active === 'manual-material') return <ManualMaterial user={user} />;
     if (active === 'pdms') return <Pdms user={user} />;
     if (active === 'history') return <History user={user} />;
-    return <Dashboard />;
+    return <Dashboard user={user} />;
   }, [active, user, isAdmin]);
 
   function login(nextUser) {
@@ -51,7 +51,7 @@ export default function App() {
       <Sidebar active={active} setActive={setActive} user={user} onLogout={logout} />
       <main className="min-w-0 flex-1 overflow-auto">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur">
-          <div className="text-sm font-semibold text-slate-600">Ambiente MVP • SQLite local • Usuario responsavel: {user.name}</div>
+          <div className="text-sm font-semibold text-slate-600">Ambiente MVP - PostgreSQL online - Usuario responsavel: {user.name}</div>
           {!isAdmin && <div className="flex gap-2"><ExportButtons user={user} /></div>}
         </header>
         <section className="p-6">{content}</section>

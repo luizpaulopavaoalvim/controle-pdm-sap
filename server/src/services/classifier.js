@@ -11,9 +11,11 @@ function parseAttributes(pdm = {}) {
 
 function scoreMaterial(material, pdm) {
   const pdmName = pdm.nome_valido || pdm.nome_pdm || '';
+  const briefText = material.descricao || '';
+  const longText = material.texto_longo_original || '';
   const materialText = [
-    material.descricao,
-    material.texto_longo_original,
+    briefText,
+    longText,
     material.tipo_material,
     material.fabricante,
     material.part_number,
@@ -23,12 +25,17 @@ function scoreMaterial(material, pdm) {
     material.aplicacao
   ].join(' ');
 
+  const briefTokens = new Set(tokenize(briefText));
+  const longTokens = new Set(tokenize(longText));
   const tokens = new Set(tokenize(materialText));
   const keywords = tokenize(pdm.palavra_chave || pdmName);
   const attributeText = parseAttributes(pdm).map((attr) => attr.attribute_name).join(' ');
   const pdmTokens = tokenize(`${pdmName} ${pdm.descricao_pdm || ''} ${pdm.tipo_material || ''} ${attributeText}`);
+  const pdmNameTokens = tokenize(pdmName);
+  const normalizedBrief = normalize(briefText).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalizedLong = normalize(longText).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   const normalizedMaterial = normalize(materialText);
-  const normalizedPdmName = normalize(pdmName);
+  const normalizedPdmName = normalize(pdmName).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   let points = 0;
   const reasons = [];
@@ -37,15 +44,36 @@ function scoreMaterial(material, pdm) {
     return { score: -1, confidence: 0, reasons: ['PDM reservado para itens sem padrao'] };
   }
 
-  if (normalizedPdmName && normalizedMaterial.includes(normalizedPdmName)) {
+  if (normalizedPdmName && normalizedBrief.includes(normalizedPdmName)) {
     points += 95;
-    reasons.push('correspondencia direta com Nome Valido');
+    reasons.push('correspondencia direta do Nome Valido no Texto breve');
+  } else if (normalizedPdmName && normalizedLong.includes(normalizedPdmName)) {
+    points += 80;
+    reasons.push('correspondencia direta do Nome Valido no Texto Longo');
+  }
+
+  const briefNameMatches = pdmNameTokens.filter((term) => briefTokens.has(term));
+  const longNameMatches = pdmNameTokens.filter((term) => longTokens.has(term));
+  if (pdmNameTokens.length) {
+    const briefRatio = briefNameMatches.length / pdmNameTokens.length;
+    const longRatio = longNameMatches.length / pdmNameTokens.length;
+    if (briefRatio > 0 && briefRatio < 1) {
+      points += Math.round(briefRatio * 55);
+      reasons.push(`termos do Nome Valido no Texto breve: ${briefNameMatches.join(', ')}`);
+    }
+    if (longRatio > 0 && longRatio < 1) {
+      points += Math.round(longRatio * 35);
+      reasons.push(`termos do Nome Valido no Texto Longo: ${longNameMatches.join(', ')}`);
+    }
   }
 
   for (const keyword of keywords) {
-    if (tokens.has(keyword)) {
-      points += 16;
-      reasons.push(`termo tecnico ${keyword}`);
+    if (briefTokens.has(keyword)) {
+      points += 14;
+      reasons.push(`termo tecnico ${keyword} no Texto breve`);
+    } else if (longTokens.has(keyword)) {
+      points += 8;
+      reasons.push(`termo tecnico ${keyword} no Texto Longo`);
     }
   }
 

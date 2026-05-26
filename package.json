@@ -9,6 +9,7 @@
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "validate:dev": "node scripts/validate-dev.mjs",
     "qa:functional": "node scripts/functional-qa.mjs",
+    "qa:large": "node scripts/qa-large-import.mjs",
     "qa:import-flex": "node scripts/test-flex-material-import.mjs",
     "reset:data": "node scripts/reset-real-data.mjs",
     "migrate:postgres": "node scripts/migrate-postgres.mjs",

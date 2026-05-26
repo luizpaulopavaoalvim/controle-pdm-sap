@@ -23,10 +23,10 @@ async function ensureFallbackPdm() {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     '1',
-    '(NÃO-PADRONIZADO)',
+    '(NAO-PADRONIZADO)',
     '[]',
     '1',
-    '(NÃO-PADRONIZADO)',
+    '(NAO-PADRONIZADO)',
     'Fallback usado apenas quando nenhum PDM adequado for encontrado.',
     '',
     'NAO PADRONIZADO',

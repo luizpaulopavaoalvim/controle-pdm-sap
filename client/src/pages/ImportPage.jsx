@@ -19,7 +19,7 @@ export function ImportPdm({ user }) {
 
   return (
     <>
-      <PageHeader title="Importacao da Base de PDM" subtitle="Modelo esperado: Id Padrao | Nome Valido | DT_01 | DT_02 | DT_03..." />
+      <PageHeader title="Importacao da Base de PDM" subtitle="Modelo esperado: Id Padrao | Nome Valido. Colunas extras serao ignoradas." />
       <section className="mb-5 rounded-lg border border-slate-200 bg-white p-5 shadow-fiori">
         <div className="grid gap-4 md:grid-cols-3">
           <div>
@@ -49,8 +49,8 @@ export function ImportPdm({ user }) {
         )}
       </section>
       <UploadPanel
-        title="Base de PDM Klassmatt"
-        description="Aba esperada: Parte1. As colunas DT_01 ate DT_115 serao importadas como atributos tecnicos ordenados."
+        title="Base de PDM"
+        description="Aba esperada: Parte1 ou a primeira aba do arquivo. Informe Id Padrao e Nome Valido; qualquer coluna extra sera ignorada."
         onUpload={async (file) => {
           const form = new FormData();
           form.append('file', file);
@@ -72,6 +72,7 @@ export function ImportMaterials({ user }) {
       <UploadPanel
         title="Planilha de materiais"
         description="Campos aceitos: Codigo, Texto Breve e Texto Longo, incluindo variacoes de acentos, caixa e espacos."
+        processingLabel="Processando materiais, aguarde..."
         onUpload={async (file) => {
           const form = new FormData();
           form.append('file', file);
