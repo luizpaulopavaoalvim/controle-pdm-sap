@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import { api } from '../services/api';
@@ -45,6 +45,7 @@ export default function Dashboard({ user, message = '' }) {
 
   if (!data) return <p>Carregando dashboard...</p>;
   const title = data.latestImport?.file_name ? `Dashboard Principal - ${data.latestImport.file_name}` : 'Dashboard Principal';
+  const seconds = Math.round((data.cards.averageProcessingMs || 0) / 1000);
 
   return (
     <>
@@ -101,7 +102,25 @@ export default function Dashboard({ user, message = '' }) {
         <Card label="Validar" value={data.cards.totalValidar} accent="text-sap-amber" />
         <Card label="Revisar" value={data.cards.totalRevisar} accent="text-rose-700" />
         <Card label="Pendente" value={data.cards.totalPendente} />
+        <Card label="Concluido/Aprovado" value={data.cards.totalConcluido || 0} accent="text-sap-green" />
+        <Card label="Pendente %" value={`${data.cards.percentPending || 0}%`} />
+        <Card label="Linhas processadas" value={data.cards.importedRows || 0} accent="text-sap-blue" />
+        <Card label="Tempo processamento" value={seconds ? `${seconds}s` : '0s'} />
       </div>
+      <section className="mt-5 grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-3">
+        <div>
+          <div className="text-xs font-bold uppercase text-slate-500">Ultima planilha</div>
+          <div className="mt-1 truncate text-sm font-bold text-sap-dark">{data.latestImport?.file_name || 'Nenhuma planilha importada'}</div>
+        </div>
+        <div>
+          <div className="text-xs font-bold uppercase text-slate-500">Ultima importacao</div>
+          <div className="mt-1 text-sm font-bold text-sap-dark">{data.latestImport?.imported_at || 'Sem data'}</div>
+        </div>
+        <div>
+          <div className="text-xs font-bold uppercase text-slate-500">Projeto</div>
+          <div className="mt-1 text-sm font-bold text-sap-dark">Empresa Principal / Projeto Principal</div>
+        </div>
+      </section>
       <section className="mt-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-bold text-sap-dark">Avanço da padronização</h2>
@@ -138,6 +157,32 @@ export default function Dashboard({ user, message = '' }) {
               <Tooltip />
               <Bar dataKey="value" fill="#0a6ed1" radius={[4, 4, 0, 0]} />
             </BarChart>
+          </ResponsiveContainer>
+        </section>
+      </div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-lg font-bold text-sap-dark">Total por usuario</h2>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data.byUser || []}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="value" fill="#107e3e" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </section>
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-lg font-bold text-sap-dark">Evolucao diaria</h2>
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={data.dailyEvolution || []}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Line type="monotone" dataKey="value" stroke="#0a6ed1" strokeWidth={3} dot />
+            </LineChart>
           </ResponsiveContainer>
         </section>
       </div>

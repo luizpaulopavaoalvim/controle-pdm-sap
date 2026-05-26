@@ -13,7 +13,13 @@ const items = [
 ];
 
 export default function Sidebar({ active, setActive, user, onLogout }) {
-  const visibleItems = user?.role === 'Admin' ? items.filter(([id]) => id === 'dashboard') : items;
+  const visibleItems = user?.role === 'Admin'
+    ? items.filter(([id]) => id === 'dashboard')
+    : user?.role === 'Leitura'
+      ? items.filter(([id]) => ['dashboard', 'final', 'history'].includes(id))
+      : user?.role === 'Validador'
+        ? items.filter(([id]) => ['dashboard', 'materials', 'final', 'history'].includes(id))
+        : items;
   return (
     <aside className="flex h-screen w-72 flex-col border-r border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-5 py-5">
@@ -33,9 +39,9 @@ export default function Sidebar({ active, setActive, user, onLogout }) {
             {label}
           </button>
         ))}
-        {user?.role === 'Admin' && (
+        {['Admin', 'Leitura'].includes(user?.role) && (
           <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-3 text-xs font-semibold text-sap-blue">
-            Acesso somente leitura para acompanhamento do dashboard.
+            Acesso de consulta. Acoes de alteracao ficam bloqueadas pelo perfil.
           </div>
         )}
       </nav>

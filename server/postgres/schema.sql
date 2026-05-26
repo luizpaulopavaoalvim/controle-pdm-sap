@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT NOT NULL UNIQUE,
   email TEXT,
   password TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('Admin','Consultor','Validador'))
+  role TEXT NOT NULL CHECK (role IN ('Admin','Consultor','Validador','Leitura'))
 );
 
 CREATE TABLE IF NOT EXISTS pdms (
@@ -48,6 +48,12 @@ CREATE TABLE IF NOT EXISTS materials (
   suggested_pdm_name TEXT,
   confidence INTEGER DEFAULT 0,
   suggestion_reason TEXT,
+  alternative_1 TEXT,
+  alternative_2 TEXT,
+  alternative_3 TEXT,
+  matched_words TEXT,
+  doubtful_words TEXT,
+  processing_ms INTEGER DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'PENDENTE',
   responsible TEXT,
   short_pt TEXT,
@@ -89,6 +95,9 @@ CREATE TABLE IF NOT EXISTS history (
   action TEXT,
   entity TEXT,
   note TEXT,
+  ip_address TEXT,
+  user_agent TEXT,
+  screen TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -97,7 +106,40 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS companies (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id BIGSERIAL PRIMARY KEY,
+  company_id BIGINT REFERENCES companies(id),
+  name TEXT NOT NULL,
+  pdm_base_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(company_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS technical_logs (
+  id BIGSERIAL PRIMARY KEY,
+  level TEXT NOT NULL DEFAULT 'info',
+  action TEXT,
+  entity TEXT,
+  message TEXT,
+  details JSONB DEFAULT '{}'::jsonb,
+  duration_ms INTEGER,
+  rows_processed INTEGER,
+  user_id BIGINT,
+  user_name TEXT,
+  user_role TEXT,
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_materials_status ON materials(status);
 CREATE INDEX IF NOT EXISTS idx_materials_import_order ON materials(import_order);
 CREATE INDEX IF NOT EXISTS idx_history_created_at ON history(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pdms_id_pdm ON pdms(id_pdm);
+CREATE INDEX IF NOT EXISTS idx_technical_logs_created_at ON technical_logs(created_at DESC);

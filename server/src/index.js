@@ -13,6 +13,7 @@ import materialRoutes from './routes/materials.js';
 import historyRoutes from './routes/history.js';
 import exportRoutes from './routes/export.js';
 import adminRoutes from './routes/admin.js';
+import technicalLogRoutes from './routes/technicalLogs.js';
 
 dotenv.config();
 
@@ -59,6 +60,7 @@ app.use('/api/materials', upload.single('file'), materialRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/technical-logs', technicalLogRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error('[api-error]', error.message);

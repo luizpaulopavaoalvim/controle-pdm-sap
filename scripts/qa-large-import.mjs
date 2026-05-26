@@ -152,10 +152,19 @@ try {
 
   const exportFinal = await api(`/export/final?user=${encodeURIComponent(consultant)}`);
   const exportComplete = await api(`/export/complete?user=${encodeURIComponent(consultant)}`);
+  const exportOk = await api(`/export/status/OK?user=${encodeURIComponent(consultant)}`);
+  const exportHistory = await api(`/export/history?user=${encodeURIComponent(consultant)}`);
+  const exportDashboard = await api(`/export/dashboard-summary?user=${encodeURIComponent(consultant)}`);
   const finalRows = XLSX.utils.sheet_to_json(XLSX.read(Buffer.from(await exportFinal.arrayBuffer())).Sheets['Resultado Final']);
   const completeRows = XLSX.utils.sheet_to_json(XLSX.read(Buffer.from(await exportComplete.arrayBuffer())).Sheets['Base Completa']);
+  const okRows = XLSX.utils.sheet_to_json(XLSX.read(Buffer.from(await exportOk.arrayBuffer())).Sheets['Somente OK']);
+  const historyRows = XLSX.utils.sheet_to_json(XLSX.read(Buffer.from(await exportHistory.arrayBuffer())).Sheets['Historico']);
+  const dashboardRows = XLSX.utils.sheet_to_json(XLSX.read(Buffer.from(await exportDashboard.arrayBuffer())).Sheets['Resumo Dashboard']);
   if (finalRows.length !== totalMaterials || completeRows.length !== totalMaterials) {
     throw new Error(`Exportacao nao bate com total importado: final=${finalRows.length}, completa=${completeRows.length}`);
+  }
+  if (okRows.length !== totalMaterials || !historyRows.length || !dashboardRows.length) {
+    throw new Error(`Exportacoes inteligentes inconsistentes: ok=${okRows.length}, historico=${historyRows.length}, dashboard=${dashboardRows.length}`);
   }
 
   const adminDeleteBlocked = await fetch('http://127.0.0.1:4000/api/admin/clear-operational-data', {
@@ -217,6 +226,9 @@ try {
     },
     exportFinalRows: finalRows.length,
     exportCompleteRows: completeRows.length,
+    exportOkRows: okRows.length,
+    exportHistoryRows: historyRows.length,
+    exportDashboardRows: dashboardRows.length,
     clearMessage: clearPayload.message,
     usersPreserved: usersAfterClear.length,
     dashboardAfterClear: dashboardAfterClear.cards,

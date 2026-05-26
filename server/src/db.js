@@ -171,6 +171,67 @@ async function initPostgres() {
   const schema = fs.readFileSync(path.resolve(__dirname, '..', 'postgres', 'schema.sql'), 'utf8');
   const seed = fs.readFileSync(path.resolve(__dirname, '..', 'postgres', 'seed.sql'), 'utf8');
   await pool.query(schema);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check'
+      ) THEN
+        ALTER TABLE users DROP CONSTRAINT users_role_check;
+      END IF;
+    END $$;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('Admin','Consultor','Validador','Leitura'));
+
+    CREATE TABLE IF NOT EXISTS companies (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS projects (
+      id BIGSERIAL PRIMARY KEY,
+      company_id BIGINT REFERENCES companies(id),
+      name TEXT NOT NULL,
+      pdm_base_name TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(company_id, name)
+    );
+    INSERT INTO companies (name) VALUES ('Empresa Principal') ON CONFLICT(name) DO NOTHING;
+    INSERT INTO projects (company_id, name, pdm_base_name)
+    SELECT id, 'Projeto Principal', 'Klassmatt' FROM companies WHERE name = 'Empresa Principal'
+    ON CONFLICT(company_id, name) DO NOTHING;
+
+    ALTER TABLE pdms ADD COLUMN IF NOT EXISTS company_id BIGINT;
+    ALTER TABLE pdms ADD COLUMN IF NOT EXISTS project_id BIGINT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS company_id BIGINT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS project_id BIGINT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS alternative_1 TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS alternative_2 TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS alternative_3 TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS matched_words TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS doubtful_words TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS processing_ms INTEGER DEFAULT 0;
+    ALTER TABLE history ADD COLUMN IF NOT EXISTS ip_address TEXT;
+    ALTER TABLE history ADD COLUMN IF NOT EXISTS user_agent TEXT;
+    ALTER TABLE history ADD COLUMN IF NOT EXISTS screen TEXT;
+
+    CREATE TABLE IF NOT EXISTS technical_logs (
+      id BIGSERIAL PRIMARY KEY,
+      level TEXT NOT NULL DEFAULT 'info',
+      action TEXT,
+      entity TEXT,
+      message TEXT,
+      details JSONB DEFAULT '{}'::jsonb,
+      duration_ms INTEGER,
+      rows_processed INTEGER,
+      user_id BIGINT,
+      user_name TEXT,
+      user_role TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_technical_logs_created_at ON technical_logs(created_at DESC);
+  `);
   await pool.query(seed);
 }
 
@@ -189,7 +250,7 @@ async function initSqlite() {
       username TEXT NOT NULL UNIQUE,
       email TEXT,
       password TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('Admin','Consultor','Validador'))
+      role TEXT NOT NULL CHECK(role IN ('Admin','Consultor','Validador','Leitura'))
     );
 
     CREATE TABLE IF NOT EXISTS pdms (
@@ -233,6 +294,12 @@ async function initSqlite() {
       suggested_pdm_name TEXT,
       confidence INTEGER DEFAULT 0,
       suggestion_reason TEXT,
+      alternative_1 TEXT,
+      alternative_2 TEXT,
+      alternative_3 TEXT,
+      matched_words TEXT,
+      doubtful_words TEXT,
+      processing_ms INTEGER DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'PENDENTE',
       responsible TEXT,
       short_pt TEXT,
@@ -274,12 +341,32 @@ async function initSqlite() {
       action TEXT,
       entity TEXT,
       note TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      screen TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
       value TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS technical_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      level TEXT NOT NULL DEFAULT 'info',
+      action TEXT,
+      entity TEXT,
+      message TEXT,
+      details TEXT,
+      duration_ms INTEGER,
+      rows_processed INTEGER,
+      user_id INTEGER,
+      user_name TEXT,
+      user_role TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
@@ -300,11 +387,20 @@ async function initSqlite() {
   await addColumnIfMissing('materials', 'modified_by_name', 'TEXT');
   await addColumnIfMissing('materials', 'modified_by_role', 'TEXT');
   await addColumnIfMissing('materials', 'modified_at', 'TEXT');
+  await addColumnIfMissing('materials', 'alternative_1', 'TEXT');
+  await addColumnIfMissing('materials', 'alternative_2', 'TEXT');
+  await addColumnIfMissing('materials', 'alternative_3', 'TEXT');
+  await addColumnIfMissing('materials', 'matched_words', 'TEXT');
+  await addColumnIfMissing('materials', 'doubtful_words', 'TEXT');
+  await addColumnIfMissing('materials', 'processing_ms', 'INTEGER DEFAULT 0');
   await addColumnIfMissing('users', 'email', 'TEXT');
   await addColumnIfMissing('history', 'user_id', 'INTEGER');
   await addColumnIfMissing('history', 'user_role', 'TEXT');
   await addColumnIfMissing('history', 'action', 'TEXT');
   await addColumnIfMissing('history', 'entity', 'TEXT');
+  await addColumnIfMissing('history', 'ip_address', 'TEXT');
+  await addColumnIfMissing('history', 'user_agent', 'TEXT');
+  await addColumnIfMissing('history', 'screen', 'TEXT');
 }
 
 export async function initDb() {

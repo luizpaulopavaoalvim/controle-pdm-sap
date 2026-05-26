@@ -6,6 +6,7 @@ import { describeColumns, isEmptyRow, mapRowFlexible, readWorkbookRows } from '.
 import { addHistory, recordChanges } from '../services/history.js';
 import { setSettings } from '../services/settings.js';
 import { actorPayload, requireOperationalActor } from '../services/actors.js';
+import { addTechnicalLog } from '../services/technicalLogs.js';
 
 const router = express.Router();
 
@@ -75,6 +76,7 @@ async function upsertMaterialPayload(payload) {
       codigo, descricao, texto_longo_original, centro, deposito, tipo_material, fabricante, part_number,
       modelo, dimensao, material, aplicacao, observacao, suggested_pdm_id,
       suggested_pdm_name, confidence, suggestion_reason, status, responsible,
+      alternative_1, alternative_2, alternative_3, matched_words, doubtful_words, processing_ms,
       short_pt, long_pt, short_en, long_en, final_result,
       source_file, import_batch, row_number, import_order, import_error,
       modified_by_user_id, modified_by_name, modified_by_role
@@ -82,6 +84,7 @@ async function upsertMaterialPayload(payload) {
       @codigo, @descricao, @texto_longo_original, @centro, @deposito, @tipo_material, @fabricante, @part_number,
       @modelo, @dimensao, @material, @aplicacao, @observacao, @suggested_pdm_id,
       @suggested_pdm_name, @confidence, @suggestion_reason, @status, @responsible,
+      @alternative_1, @alternative_2, @alternative_3, @matched_words, @doubtful_words, @processing_ms,
       @short_pt, @long_pt, @short_en, @long_en, @final_result,
       @source_file, @import_batch, @row_number, @import_order, @import_error,
       @modified_by_user_id, @modified_by_name, @modified_by_role
@@ -103,6 +106,12 @@ async function upsertMaterialPayload(payload) {
       suggested_pdm_name=excluded.suggested_pdm_name,
       confidence=excluded.confidence,
       suggestion_reason=excluded.suggestion_reason,
+      alternative_1=excluded.alternative_1,
+      alternative_2=excluded.alternative_2,
+      alternative_3=excluded.alternative_3,
+      matched_words=excluded.matched_words,
+      doubtful_words=excluded.doubtful_words,
+      processing_ms=excluded.processing_ms,
       status=excluded.status,
       responsible=excluded.responsible,
       short_pt=excluded.short_pt,
@@ -134,6 +143,7 @@ async function bulkUpsertMaterialPayloads(payloads) {
     'codigo', 'descricao', 'texto_longo_original', 'centro', 'deposito', 'tipo_material', 'fabricante', 'part_number',
     'modelo', 'dimensao', 'material', 'aplicacao', 'observacao', 'suggested_pdm_id',
     'suggested_pdm_name', 'confidence', 'suggestion_reason', 'status', 'responsible',
+    'alternative_1', 'alternative_2', 'alternative_3', 'matched_words', 'doubtful_words', 'processing_ms',
     'short_pt', 'long_pt', 'short_en', 'long_en', 'final_result',
     'source_file', 'import_batch', 'row_number', 'import_order', 'import_error',
     'modified_by_user_id', 'modified_by_name', 'modified_by_role'
@@ -170,6 +180,12 @@ async function bulkUpsertMaterialPayloads(payloads) {
         suggested_pdm_name=excluded.suggested_pdm_name,
         confidence=excluded.confidence,
         suggestion_reason=excluded.suggestion_reason,
+        alternative_1=excluded.alternative_1,
+        alternative_2=excluded.alternative_2,
+        alternative_3=excluded.alternative_3,
+        matched_words=excluded.matched_words,
+        doubtful_words=excluded.doubtful_words,
+        processing_ms=excluded.processing_ms,
         status=excluded.status,
         responsible=excluded.responsible,
         short_pt=excluded.short_pt,
@@ -235,7 +251,8 @@ router.put('/:id', async (req, res) => {
   const allowed = [
     'codigo', 'descricao', 'texto_longo_original', 'centro', 'deposito', 'tipo_material', 'fabricante', 'part_number',
     'modelo', 'dimensao', 'material', 'aplicacao', 'observacao', 'suggested_pdm_id', 'suggested_pdm_name',
-    'confidence', 'suggestion_reason', 'status', 'responsible', 'short_pt', 'long_pt', 'short_en', 'long_en', 'final_result',
+    'confidence', 'suggestion_reason', 'alternative_1', 'alternative_2', 'alternative_3', 'matched_words', 'doubtful_words',
+    'processing_ms', 'status', 'responsible', 'short_pt', 'long_pt', 'short_en', 'long_en', 'final_result',
     'source_file', 'import_batch', 'row_number', 'import_order', 'import_error',
     'modified_by_user_id', 'modified_by_name', 'modified_by_role'
   ];
@@ -278,6 +295,7 @@ router.post('/:id/generate', async (req, res) => {
 });
 
 router.post('/import', async (req, res) => {
+  const startTime = Date.now();
   if (!req.file) return res.status(400).json({ message: 'Arquivo nao enviado' });
   const actor = await requireOperationalActor(req, res, ['Consultor']);
   if (!actor) return;
@@ -352,8 +370,22 @@ router.post('/import', async (req, res) => {
   });
 
   const summary = { read: rows.length, imported, ignored, ignoredReasons, errors, columns, fileName, batchId };
+  const durationMs = Date.now() - startTime;
+  await setSettings({
+    latest_material_processing_ms: durationMs
+  });
+  await addTechnicalLog({
+    req,
+    user: actor,
+    action: 'materiais_importados',
+    entity: 'Material',
+    message: 'Importacao de materiais concluida',
+    details: summary,
+    durationMs,
+    rowsProcessed: imported
+  });
   console.log('[import-materials] resumo:', summary);
-  res.json(summary);
+  res.json({ ...summary, processingMs: durationMs });
 });
 
 export default router;

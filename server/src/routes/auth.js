@@ -46,6 +46,7 @@ router.post('/login', async (req, res) => {
     WHERE (username = ? OR name = ?) AND password = ?
   `).get(username, username, password);
   if (!user) return res.status(401).json({ message: 'Usuario ou senha invalidos' });
+  await addHistory({ user, action: 'Login realizado', entity: 'Autenticacao', field: 'login', newValue: user.username, req, screen: 'Login' });
   res.json({ user, token: `demo-token-${user.username}` });
 });
 
@@ -85,7 +86,9 @@ router.post('/register', async (req, res) => {
     user,
     action: 'Usuario cadastrado',
     entity: 'Usuario',
-    note: `Cadastro criado para ${email}`
+    note: `Cadastro criado para ${email}`,
+    req,
+    screen: 'Cadastro'
   });
   await notifyUserRegistration(user);
   res.status(201).json({ user, token: `demo-token-${user.username}` });

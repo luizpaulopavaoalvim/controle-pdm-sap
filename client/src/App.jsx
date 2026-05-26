@@ -16,11 +16,15 @@ export default function App() {
   });
   const [active, setActive] = useState('dashboard');
   const isAdmin = user?.role === 'Admin';
+  const isReadOnly = user?.role === 'Leitura';
 
   const content = useMemo(() => {
     if (!user) return null;
     if (isAdmin && active !== 'dashboard') {
       return <Dashboard user={user} message="Acesso somente leitura. Perfil autorizado apenas para acompanhamento do dashboard." />;
+    }
+    if (isReadOnly && !['dashboard', 'final', 'history'].includes(active)) {
+      return <Dashboard user={user} message="Seu perfil não possui permissão para esta ação." />;
     }
     if (active === 'dashboard') return <Dashboard user={user} />;
     if (active === 'import-pdm') return <ImportPdm user={user} />;
@@ -31,7 +35,7 @@ export default function App() {
     if (active === 'pdms') return <Pdms user={user} />;
     if (active === 'history') return <History user={user} />;
     return <Dashboard user={user} />;
-  }, [active, user, isAdmin]);
+  }, [active, user, isAdmin, isReadOnly]);
 
   function login(nextUser) {
     localStorage.setItem('pdm-user', JSON.stringify(nextUser));
@@ -52,7 +56,7 @@ export default function App() {
       <main className="min-w-0 flex-1 overflow-auto">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur">
           <div className="text-sm font-semibold text-slate-600">Ambiente MVP - PostgreSQL online - Usuario responsavel: {user.name}</div>
-          {!isAdmin && <div className="flex gap-2"><ExportButtons user={user} /></div>}
+          {user.role === 'Consultor' && <div className="flex gap-2"><ExportButtons user={user} /></div>}
         </header>
         <section className="p-6">{content}</section>
       </main>

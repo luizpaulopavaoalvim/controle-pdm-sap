@@ -14,12 +14,16 @@ export async function addHistory({
   user = 'sistema',
   action = '',
   entity = '',
-  note = ''
+  note = '',
+  req = null,
+  screen = ''
 }) {
   const actor = await actorFromInput(user);
+  const ipAddress = req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req?.ip || req?.socket?.remoteAddress || '';
+  const userAgent = req?.headers?.['user-agent'] || '';
   await db.prepare(`
-    INSERT INTO history (codigo, field, old_value, new_value, "user", user_id, user_role, action, entity, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO history (codigo, field, old_value, new_value, "user", user_id, user_role, action, entity, note, ip_address, user_agent, screen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     codigo || '',
     field || action || '',
@@ -30,7 +34,10 @@ export async function addHistory({
     actor.role || 'Sistema',
     action || field || '',
     entity || '',
-    note || ''
+    note || '',
+    ipAddress,
+    userAgent,
+    screen
   );
 }
 

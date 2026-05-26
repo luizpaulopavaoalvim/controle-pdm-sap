@@ -28,7 +28,7 @@ export async function requireOperationalActor(req, res, allowedRoles = ['Consult
   const actor = await requireActor(req, res);
   if (!actor) return null;
   if (!allowedRoles.includes(actor.role)) {
-    res.status(403).json({ message: 'Acesso somente leitura. Perfil autorizado apenas para acompanhamento do dashboard.' });
+    res.status(403).json({ message: 'Seu perfil não possui permissão para esta ação.' });
     return null;
   }
   return actor;
