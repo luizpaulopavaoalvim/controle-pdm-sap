@@ -22,6 +22,8 @@ export default function Login({ onLogin }) {
   const [generatedLogin, setGeneratedLogin] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [slowLogin, setSlowLogin] = useState(false);
 
   useEffect(() => {
     if (mode !== 'register' || !form.name.trim()) {
@@ -60,8 +62,10 @@ export default function Login({ onLogin }) {
 
   async function submit(event) {
     event.preventDefault();
+    if (loading) return;
     setError('');
     setSuccess('');
+    setSlowLogin(false);
     if (!form.name.trim()) {
       setError(mode === 'login' ? 'Informe o login.' : 'Informe o nome completo.');
       return;
@@ -78,9 +82,15 @@ export default function Login({ onLogin }) {
     }
     if (!validatePassword()) return;
 
+    let slowTimer = null;
     try {
+      setLoading(true);
+      slowTimer = window.setTimeout(() => setSlowLogin(true), 1800);
       if (mode === 'login') {
+        const startedAt = performance.now();
         const { data } = await api.post('/auth/login', { username: form.name.trim(), password: form.password });
+        console.info(`[login] autenticado em ${Math.round(performance.now() - startedAt)}ms`);
+        window.clearTimeout(slowTimer);
         onLogin(data.user);
         return;
       }
@@ -93,13 +103,20 @@ export default function Login({ onLogin }) {
       setSuccess(`Cadastro criado. Use o login ${data.user.username} para entrar.`);
       setMode('login');
       setForm({ name: data.user.username, email: '', password: '', confirmPassword: '' });
+      window.clearTimeout(slowTimer);
     } catch (err) {
       setError(err.response?.data?.message || 'Nao foi possivel concluir a operacao.');
+    } finally {
+      if (slowTimer) window.clearTimeout(slowTimer);
+      setLoading(false);
+      setSlowLogin(false);
     }
   }
 
   function switchMode(nextMode) {
     setMode(nextMode);
+    setLoading(false);
+    setSlowLogin(false);
     setError('');
     setSuccess('');
     setGeneratedLogin('');
@@ -160,10 +177,15 @@ export default function Login({ onLogin }) {
               <input value={form.confirmPassword} onChange={(e) => setField('confirmPassword', e.target.value)} inputMode="numeric" pattern="\d{6}" type="password" className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2" />
             </>
           )}
+          {slowLogin && mode === 'login' && (
+            <p className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-sap-blue">
+              Acordando servidor, aguarde alguns segundos...
+            </p>
+          )}
           {error && <p className="mt-3 text-sm font-bold text-rose-700">{error}</p>}
           {success && <p className="mt-3 text-sm font-bold text-sap-green">{success}</p>}
-          <button className="mt-6 w-full rounded-md bg-sap-blue px-4 py-2.5 font-bold text-white">
-            {mode === 'login' ? 'Acessar dashboard' : 'Criar cadastro'}
+          <button disabled={loading} className="mt-6 w-full rounded-md bg-sap-blue px-4 py-2.5 font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-70">
+            {loading ? (mode === 'login' ? 'Entrando...' : 'Criando cadastro...') : (mode === 'login' ? 'Acessar dashboard' : 'Criar cadastro')}
           </button>
         </form>
       </div>

@@ -143,3 +143,5 @@ CREATE INDEX IF NOT EXISTS idx_materials_import_order ON materials(import_order)
 CREATE INDEX IF NOT EXISTS idx_history_created_at ON history(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pdms_id_pdm ON pdms(id_pdm);
 CREATE INDEX IF NOT EXISTS idx_technical_logs_created_at ON technical_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_username_password ON users(username, password);

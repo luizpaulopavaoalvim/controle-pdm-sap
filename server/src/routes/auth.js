@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../db.js';
 import { notifyUserRegistration } from '../services/email.js';
 import { addHistory } from '../services/history.js';
+import { addTechnicalLog } from '../services/technicalLogs.js';
 
 const router = express.Router();
 
@@ -35,6 +36,7 @@ async function availableUsername(name = '') {
 }
 
 router.post('/login', async (req, res) => {
+  const start = Date.now();
   const username = String(req.body.username || req.body.name || '').trim();
   const password = String(req.body.password || '').trim();
   if (!/^\d{6}$/.test(password)) {
@@ -43,10 +45,24 @@ router.post('/login', async (req, res) => {
   const user = await db.prepare(`
     SELECT id, name, username, email, role
     FROM users
-    WHERE (username = ? OR name = ?) AND password = ?
-  `).get(username, username, password);
+    WHERE username = ? AND password = ?
+    LIMIT 1
+  `).get(username, password);
+  const durationMs = Date.now() - start;
   if (!user) return res.status(401).json({ message: 'Usuario ou senha invalidos' });
-  await addHistory({ user, action: 'Login realizado', entity: 'Autenticacao', field: 'login', newValue: user.username, req, screen: 'Login' });
+  console.log(`[auth-login] user=${user.username} duration_ms=${durationMs}`);
+  setImmediate(() => {
+    addHistory({ user, action: 'Login realizado', entity: 'Autenticacao', field: 'login', newValue: user.username, req, screen: 'Login' }).catch((error) => console.error('[auth-history]', error.message));
+    addTechnicalLog({
+      req,
+      user,
+      action: 'login',
+      entity: 'Autenticacao',
+      message: 'Login realizado',
+      durationMs,
+      rowsProcessed: 1
+    }).catch((error) => console.error('[auth-log]', error.message));
+  });
   res.json({ user, token: `demo-token-${user.username}` });
 });
 
