@@ -215,6 +215,66 @@ async function insertOrUpdateMaterial(rawMaterial, user = 'sistema') {
   return payload;
 }
 
+async function reprocessMaterialRow(row, actor, preparedPdms, req = null) {
+  const previous = {
+    pdm: `${row.suggested_pdm_id || ''} - ${row.suggested_pdm_name || ''}`.trim(),
+    confidence: row.confidence,
+    status: row.status
+  };
+  const suggestion = await suggestForMaterial(row, preparedPdms);
+  const finalResult = ['OK', 'APROVADO', 'CONCLUIDO'].includes(suggestion.status) ? 1 : 0;
+  await db.prepare(`
+    UPDATE materials SET
+      suggested_pdm_id=@suggested_pdm_id,
+      suggested_pdm_name=@suggested_pdm_name,
+      confidence=@confidence,
+      suggestion_reason=@suggestion_reason,
+      status=@status,
+      responsible=@responsible,
+      alternative_1=@alternative_1,
+      alternative_2=@alternative_2,
+      alternative_3=@alternative_3,
+      matched_words=@matched_words,
+      doubtful_words=@doubtful_words,
+      processing_ms=@processing_ms,
+      short_pt=@short_pt,
+      long_pt=@long_pt,
+      short_en=@short_en,
+      long_en=@long_en,
+      final_result=@final_result,
+      modified_by_user_id=@modified_by_user_id,
+      modified_by_name=@modified_by_name,
+      modified_by_role=@modified_by_role,
+      modified_at=CURRENT_TIMESTAMP,
+      updated_at=CURRENT_TIMESTAMP
+    WHERE id=@id
+  `).run({
+    ...suggestion,
+    final_result: finalResult,
+    responsible: actor.username,
+    ...actorPayload(actor),
+    id: row.id
+  });
+  const next = {
+    pdm: `${suggestion.suggested_pdm_id || ''} - ${suggestion.suggested_pdm_name || ''}`.trim(),
+    confidence: suggestion.confidence,
+    status: suggestion.status
+  };
+  await addHistory({
+    codigo: row.codigo,
+    field: 'reprocessamento',
+    oldValue: JSON.stringify(previous),
+    newValue: JSON.stringify(next),
+    user: actor,
+    action: 'Material reprocessado',
+    entity: 'Material',
+    note: suggestion.suggestion_reason,
+    req,
+    screen: 'Classificacao'
+  });
+  return { previous, next, suggestion };
+}
+
 router.get('/', async (req, res) => {
   const { status = '', pdm = '', responsible = '', centro = '', tipo = '', q = '', minConfidence = 0 } = req.query;
   const rows = await db.prepare(`
@@ -241,6 +301,56 @@ router.post('/', async (req, res) => {
   if (!actor) return;
   const payload = await insertOrUpdateMaterial({ ...req.body, ...actorPayload(actor) }, actor);
   res.status(201).json(payload);
+});
+
+router.post('/reprocess', async (req, res) => {
+  const startTime = Date.now();
+  const actor = await requireOperationalActor(req, res, ['Consultor', 'Validador']);
+  if (!actor) return;
+  const statuses = Array.isArray(req.body.statuses) ? req.body.statuses : [];
+  const allowedStatuses = statuses.map((item) => String(item || '').toUpperCase()).filter(Boolean);
+  if (!allowedStatuses.length) return res.status(400).json({ message: 'Informe ao menos um status para reprocessar' });
+  const placeholders = allowedStatuses.map(() => '?').join(', ');
+  const rows = await db.prepare(`SELECT * FROM materials WHERE status IN (${placeholders}) ORDER BY COALESCE(import_order, id), row_number, id`).all(...allowedStatuses);
+  const preparedPdms = preparePdmsForMatching(await db.prepare('SELECT * FROM pdms').all());
+  const results = [];
+  for (const row of rows) {
+    results.push(await reprocessMaterialRow(row, actor, preparedPdms, req));
+  }
+  const durationMs = Date.now() - startTime;
+  await addTechnicalLog({
+    req,
+    user: actor,
+    action: 'materiais_reprocessados',
+    entity: 'Material',
+    message: 'Reprocessamento em lote concluido',
+    details: { statuses: allowedStatuses, total: results.length },
+    durationMs,
+    rowsProcessed: results.length
+  });
+  res.json({ reprocessed: results.length, statuses: allowedStatuses, processingMs: durationMs });
+});
+
+router.post('/:id/reprocess', async (req, res) => {
+  const startTime = Date.now();
+  const row = await db.prepare('SELECT * FROM materials WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ message: 'Material nao encontrado' });
+  const actor = await requireOperationalActor(req, res, ['Consultor', 'Validador']);
+  if (!actor) return;
+  const preparedPdms = preparePdmsForMatching(await db.prepare('SELECT * FROM pdms').all());
+  const result = await reprocessMaterialRow(row, actor, preparedPdms, req);
+  const durationMs = Date.now() - startTime;
+  await addTechnicalLog({
+    req,
+    user: actor,
+    action: 'material_reprocessado',
+    entity: 'Material',
+    message: 'Reprocessamento de item concluido',
+    details: { codigo: row.codigo, previous: result.previous, next: result.next },
+    durationMs,
+    rowsProcessed: 1
+  });
+  res.json(await db.prepare('SELECT * FROM materials WHERE id = ?').get(req.params.id));
 });
 
 router.put('/:id', async (req, res) => {

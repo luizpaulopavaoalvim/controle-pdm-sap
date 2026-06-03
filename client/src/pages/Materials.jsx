@@ -12,6 +12,8 @@ export default function Materials({ user, finalOnly = false }) {
   const [editing, setEditing] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [processing, setProcessing] = useState('');
+  const [message, setMessage] = useState('');
 
   async function load() {
     const { data } = await api.get('/materials', { params: finalOnly ? { ...filters, status: '' } : filters });
@@ -32,6 +34,30 @@ export default function Materials({ user, finalOnly = false }) {
     await load();
   }
 
+  async function reprocessItem(row) {
+    setProcessing(`item-${row.id}`);
+    setMessage('');
+    try {
+      await api.post(`/materials/${row.id}/reprocess`, { user: user.username });
+      setMessage(`Material ${row.codigo} reprocessado com sucesso.`);
+      await load();
+    } finally {
+      setProcessing('');
+    }
+  }
+
+  async function reprocessStatuses(statuses) {
+    setProcessing(`status-${statuses.join('-')}`);
+    setMessage('');
+    try {
+      const { data } = await api.post('/materials/reprocess', { statuses, user: user.username });
+      setMessage(`${data.reprocessed} material(is) reprocessado(s).`);
+      await load();
+    } finally {
+      setProcessing('');
+    }
+  }
+
   async function saveEdit(event) {
     event.preventDefault();
     await api.put(`/materials/${editing.id}`, { ...editing, user: user.username, note: 'Edicao pela tela' });
@@ -49,9 +75,16 @@ export default function Materials({ user, finalOnly = false }) {
         title={finalOnly ? 'Resultado Final' : 'Classificacao de Materiais'}
         subtitle={finalOnly ? 'De duplo clique em uma linha para editar os textos antes da exportacao.' : 'Aprovacao, validacao, revisao e geracao do resultado final por material.'}
         actions={!finalOnly && (
-          <button onClick={load} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700">Atualizar</button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => reprocessStatuses(['VALIDAR'])} disabled={Boolean(processing)} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 disabled:opacity-60">Reprocessar VALIDAR</button>
+            <button onClick={() => reprocessStatuses(['REVISAR'])} disabled={Boolean(processing)} className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-800 disabled:opacity-60">Reprocessar REVISAR</button>
+            <button onClick={() => reprocessStatuses(['VALIDAR', 'REVISAR'])} disabled={Boolean(processing)} className="rounded-md bg-sap-blue px-3 py-2 text-sm font-bold text-white disabled:opacity-60">Reprocessar VALIDAR + REVISAR</button>
+            <button onClick={load} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700">Atualizar</button>
+          </div>
         )}
       />
+      {message && <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-sap-blue">{message}</div>}
+      {processing && <div className="mb-4 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600">Reprocessando materiais, aguarde...</div>}
       <section className="mb-4 grid gap-3 md:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="text-xs font-bold uppercase text-slate-500">{finalOnly ? 'Itens no resultado' : 'Itens listados'}</div>
@@ -137,6 +170,7 @@ export default function Materials({ user, finalOnly = false }) {
                     <button title="Validar" onClick={() => setStatus(row, 'VALIDAR')} className="rounded bg-amber-100 p-2 text-amber-800"><FileCheck2 size={16} /></button>
                     <button title="Revisar" onClick={() => setStatus(row, 'REVISAR')} className="rounded bg-rose-100 p-2 text-rose-800"><RotateCcw size={16} /></button>
                     <button title="Editar" onClick={() => setEditing(row)} className="rounded bg-slate-100 p-2 text-slate-700"><Edit3 size={16} /></button>
+                    <button title="Reprocessar item" onClick={() => reprocessItem(row)} disabled={Boolean(processing)} className="rounded bg-blue-50 p-2 text-sap-blue disabled:opacity-60"><RotateCcw size={16} /></button>
                     <button onClick={() => generate(row)} className="rounded bg-sap-blue px-2 py-1 text-xs font-bold text-white">Gerar</button>
                   </div>
                 </td>

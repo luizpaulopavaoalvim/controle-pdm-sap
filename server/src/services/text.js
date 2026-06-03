@@ -7,9 +7,20 @@ const ptToEn = {
   MOTOR: 'MOTOR',
   ELETRICO: 'ELECTRIC',
   VALVULA: 'VALVE',
+  PRESSAO: 'PRESSURE',
+  TRANSMISSOR: 'TRANSMITTER',
   SENSOR: 'SENSOR',
+  CHAVE: 'SWITCH',
+  INTERRUPTOR: 'SWITCH',
+  MANOMETRO: 'GAUGE',
   CABO: 'CABLE',
   FILTRO: 'FILTER',
+  OLEO: 'OIL',
+  SELO: 'SEAL',
+  VEDACAO: 'SEAL',
+  JUNTA: 'GASKET',
+  GAXETA: 'GASKET',
+  ACOPLAMENTO: 'COUPLING',
   PARAFUSO: 'SCREW',
   MODULO: 'MODULE',
   ATUADOR: 'ACTUATOR',
@@ -55,7 +66,10 @@ export function translateTechnical(value = '') {
   return normalize(value)
     .replace(/\bATUADOR PNEUMATICO\b/g, 'PNEUMATIC ACTUATOR')
     .replace(/\bBOTA SEGURANCA\b/g, 'SAFETY BOOTS')
+    .replace(/\bTRANSMISSOR PRESSAO\b/g, 'PRESSURE TRANSMITTER')
     .replace(/\bVALVULA ESFERA\b/g, 'BALL VALVE')
+    .replace(/\bROLAMENTO ESFERA\b/g, 'BALL BEARING')
+    .replace(/\bFILTRO OLEO\b/g, 'OIL FILTER')
     .split(/\s+/)
     .map((word) => ptToEn[word] || word)
     .join(' ');
