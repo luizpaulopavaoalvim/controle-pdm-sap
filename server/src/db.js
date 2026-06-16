@@ -202,6 +202,7 @@ async function initPostgres() {
 
     ALTER TABLE pdms ADD COLUMN IF NOT EXISTS company_id BIGINT;
     ALTER TABLE pdms ADD COLUMN IF NOT EXISTS project_id BIGINT;
+    ALTER TABLE pdms ADD COLUMN IF NOT EXISTS dados_tecnicos TEXT;
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS company_id BIGINT;
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS project_id BIGINT;
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS alternative_1 TEXT;
@@ -209,6 +210,7 @@ async function initPostgres() {
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS alternative_3 TEXT;
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS matched_words TEXT;
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS doubtful_words TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS technical_attributes TEXT;
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS processing_ms INTEGER DEFAULT 0;
     ALTER TABLE history ADD COLUMN IF NOT EXISTS ip_address TEXT;
     ALTER TABLE history ADD COLUMN IF NOT EXISTS user_agent TEXT;
@@ -259,6 +261,7 @@ async function initSqlite() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       id_padrao TEXT,
       nome_valido TEXT,
+      dados_tecnicos TEXT,
       atributos_dt TEXT,
       id_pdm TEXT NOT NULL UNIQUE,
       nome_pdm TEXT NOT NULL,
@@ -301,6 +304,7 @@ async function initSqlite() {
       alternative_3 TEXT,
       matched_words TEXT,
       doubtful_words TEXT,
+      technical_attributes TEXT,
       processing_ms INTEGER DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'PENDENTE',
       responsible TEXT,
@@ -374,6 +378,7 @@ async function initSqlite() {
 
   await addColumnIfMissing('pdms', 'id_padrao', 'TEXT');
   await addColumnIfMissing('pdms', 'nome_valido', 'TEXT');
+  await addColumnIfMissing('pdms', 'dados_tecnicos', 'TEXT');
   await addColumnIfMissing('pdms', 'atributos_dt', 'TEXT');
   await addColumnIfMissing('pdms', 'modified_by_user_id', 'INTEGER');
   await addColumnIfMissing('pdms', 'modified_by_name', 'TEXT');
@@ -394,6 +399,7 @@ async function initSqlite() {
   await addColumnIfMissing('materials', 'alternative_3', 'TEXT');
   await addColumnIfMissing('materials', 'matched_words', 'TEXT');
   await addColumnIfMissing('materials', 'doubtful_words', 'TEXT');
+  await addColumnIfMissing('materials', 'technical_attributes', 'TEXT');
   await addColumnIfMissing('materials', 'processing_ms', 'INTEGER DEFAULT 0');
   await addColumnIfMissing('users', 'email', 'TEXT');
   await addColumnIfMissing('history', 'user_id', 'INTEGER');

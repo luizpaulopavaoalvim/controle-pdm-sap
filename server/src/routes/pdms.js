@@ -8,7 +8,7 @@ import { addHistory } from '../services/history.js';
 const router = express.Router();
 
 const pdmFields = `
-  id_padrao, nome_valido, id_pdm, nome_pdm, descricao_pdm, tipo_material, palavra_chave,
+  id_padrao, nome_valido, dados_tecnicos, id_pdm, nome_pdm, descricao_pdm, tipo_material, palavra_chave,
   atributos_dt,
   estrutura_texto_breve_pt, estrutura_texto_longo_pt,
   estrutura_texto_breve_en, estrutura_texto_longo_en, observacao,
@@ -18,12 +18,15 @@ const pdmFields = `
 function normalizePdm(body = {}, attributes = []) {
   const id = String(body.id_padrao || body.id_pdm || '').trim();
   const name = String(body.nome_valido || body.nome_pdm || '').trim();
+  const dadosTecnicos = String(body.dados_tecnicos || body.dadosTecnicos || '').trim();
+  const finalAttributes = attributes.length ? attributes : attributesFromTechnicalData(dadosTecnicos);
   return {
     id_padrao: id,
     nome_valido: name,
+    dados_tecnicos: dadosTecnicos,
     id_pdm: id,
     nome_pdm: name,
-    atributos_dt: JSON.stringify(attributes),
+    atributos_dt: JSON.stringify(finalAttributes),
     descricao_pdm: body.descricao_pdm || '',
     tipo_material: body.tipo_material || '',
     palavra_chave: body.palavra_chave || name,
@@ -38,6 +41,27 @@ function normalizePdm(body = {}, attributes = []) {
   };
 }
 
+function normalizeAttributeName(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function attributesFromTechnicalData(value = '') {
+  return String(value || '')
+    .split(',')
+    .map(normalizeAttributeName)
+    .filter((item) => item && item !== '-')
+    .map((attributeName, index) => ({
+      dt_column: `DADOS_TECNICOS_${String(index + 1).padStart(3, '0')}`,
+      attribute_order: index + 1,
+      attribute_name: attributeName
+    }));
+}
+
 function parseAttrs(row) {
   if (Array.isArray(row.atributos_dt)) return row.atributos_dt;
   try {
@@ -50,13 +74,14 @@ function parseAttrs(row) {
 async function upsertPdm(row) {
   await db.prepare(`
     INSERT INTO pdms (${pdmFields})
-    VALUES (@id_padrao, @nome_valido, @id_pdm, @nome_pdm, @descricao_pdm, @tipo_material, @palavra_chave, @atributos_dt,
+    VALUES (@id_padrao, @nome_valido, @dados_tecnicos, @id_pdm, @nome_pdm, @descricao_pdm, @tipo_material, @palavra_chave, @atributos_dt,
       @estrutura_texto_breve_pt, @estrutura_texto_longo_pt,
       @estrutura_texto_breve_en, @estrutura_texto_longo_en, @observacao,
       @modified_by_user_id, @modified_by_name, @modified_by_role)
     ON CONFLICT(id_pdm) DO UPDATE SET
       id_padrao=excluded.id_padrao,
       nome_valido=excluded.nome_valido,
+      dados_tecnicos=excluded.dados_tecnicos,
       atributos_dt=excluded.atributos_dt,
       nome_pdm=excluded.nome_pdm,
       descricao_pdm=excluded.descricao_pdm,
@@ -94,7 +119,7 @@ async function bulkUpsertPdms(rows) {
 
   const fields = [
     'id_padrao', 'nome_valido', 'id_pdm', 'nome_pdm', 'descricao_pdm', 'tipo_material', 'palavra_chave',
-    'atributos_dt', 'estrutura_texto_breve_pt', 'estrutura_texto_longo_pt', 'estrutura_texto_breve_en',
+    'dados_tecnicos', 'atributos_dt', 'estrutura_texto_breve_pt', 'estrutura_texto_longo_pt', 'estrutura_texto_breve_en',
     'estrutura_texto_longo_en', 'observacao', 'modified_by_user_id', 'modified_by_name', 'modified_by_role'
   ];
   const chunkSize = 500;
@@ -115,6 +140,7 @@ async function bulkUpsertPdms(rows) {
       ON CONFLICT(id_pdm) DO UPDATE SET
         id_padrao=excluded.id_padrao,
         nome_valido=excluded.nome_valido,
+        dados_tecnicos=excluded.dados_tecnicos,
         atributos_dt=excluded.atributos_dt,
         nome_pdm=excluded.nome_pdm,
         descricao_pdm=excluded.descricao_pdm,
@@ -132,6 +158,55 @@ async function bulkUpsertPdms(rows) {
         updated_at=CURRENT_TIMESTAMP
     `, values);
   }
+
+  await syncPdmAttributes(rows);
+}
+
+async function syncPdmAttributes(rows) {
+  const rowsWithIds = rows.filter((row) => row.id_pdm);
+  if (!rowsWithIds.length) return;
+  if (db.client !== 'postgres') {
+    for (const row of rowsWithIds) {
+      await db.prepare('DELETE FROM pdm_attributes WHERE pdm_id = ?').run(row.id_pdm);
+      const insertAttr = db.prepare(`
+        INSERT INTO pdm_attributes (pdm_id, dt_column, attribute_order, attribute_name)
+        VALUES (?, ?, ?, ?)
+      `);
+      for (const attr of parseAttrs(row)) {
+        await insertAttr.run(row.id_pdm, attr.dt_column, attr.attribute_order, attr.attribute_name);
+      }
+    }
+    return;
+  }
+  const ids = rowsWithIds.map((row) => row.id_pdm);
+  await db.query('DELETE FROM pdm_attributes WHERE pdm_id = ANY($1)', [ids]);
+  const attrs = rowsWithIds.flatMap((row) => parseAttrs(row).map((attr) => ({
+    pdm_id: row.id_pdm,
+    dt_column: attr.dt_column,
+    attribute_order: attr.attribute_order,
+    attribute_name: attr.attribute_name
+  })));
+  if (!attrs.length) return;
+  const fields = ['pdm_id', 'dt_column', 'attribute_order', 'attribute_name'];
+  const chunkSize = 1000;
+  for (let start = 0; start < attrs.length; start += chunkSize) {
+    const chunk = attrs.slice(start, start + chunkSize);
+    const values = [];
+    const placeholders = chunk.map((row, rowIndex) => {
+      const rowPlaceholders = fields.map((field, fieldIndex) => {
+        values.push(row[field]);
+        return `$${rowIndex * fields.length + fieldIndex + 1}`;
+      });
+      return `(${rowPlaceholders.join(', ')})`;
+    });
+    await db.query(`
+      INSERT INTO pdm_attributes (${fields.join(', ')})
+      VALUES ${placeholders.join(', ')}
+      ON CONFLICT(pdm_id, dt_column) DO UPDATE SET
+        attribute_order=excluded.attribute_order,
+        attribute_name=excluded.attribute_name
+    `, values);
+  }
 }
 
 async function ensureFallbackPdm() {
@@ -143,10 +218,14 @@ async function ensureFallbackPdm() {
 async function pdmStatus() {
   const count = (await db.prepare('SELECT COUNT(*) total FROM pdms').get()).total;
   const attributeCount = (await db.prepare('SELECT COUNT(*) total FROM pdm_attributes').get()).total;
+  const allPdms = await db.prepare('SELECT atributos_dt FROM pdms').all();
+  const withTechnicalData = allPdms.filter((row) => parseAttrs(row).length > 0).length;
   return {
     imported: Number(count) > 0,
     count: Number(count),
     attributeCount: Number(attributeCount),
+    withTechnicalData,
+    withoutTechnicalData: Math.max(Number(count) - withTechnicalData, 0),
     lastImportedAt: await getSetting('latest_pdm_imported_at', ''),
     latestPdmFile: await getSetting('latest_pdm_file', '')
   };
@@ -160,9 +239,10 @@ router.get('/', async (req, res) => {
       OR nome_pdm LIKE ?
       OR COALESCE(id_padrao, '') LIKE ?
       OR COALESCE(nome_valido, '') LIKE ?
+      OR COALESCE(dados_tecnicos, '') LIKE ?
       OR COALESCE(palavra_chave, '') LIKE ?
     ORDER BY CASE WHEN id_pdm = '1' THEN 0 ELSE 1 END, nome_pdm
-  `).all(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+  `).all(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   res.json(rows.map((row) => {
     const attrs = parseAttrs(row);
     return { ...row, attribute_count: attrs.length, attributes: attrs };
@@ -193,6 +273,7 @@ router.put('/:id', async (req, res) => {
     UPDATE pdms SET
       id_padrao=@id_padrao,
       nome_valido=@nome_valido,
+      dados_tecnicos=@dados_tecnicos,
       atributos_dt=@atributos_dt,
       id_pdm=@id_pdm,
       nome_pdm=@nome_pdm,
@@ -211,6 +292,7 @@ router.put('/:id', async (req, res) => {
       updated_at=CURRENT_TIMESTAMP
     WHERE id=@id
   `).run({ ...body, id: req.params.id });
+  await syncPdmAttributes([body]);
   await addHistory({ user: actor, action: 'PDM editado', entity: 'PDM', field: 'pdm', newValue: body.nome_pdm, note: body.id_pdm });
   res.json({ message: 'PDM atualizado' });
 });
@@ -239,10 +321,14 @@ router.post('/import', async (req, res) => {
 
   const mapping = {
     id_padrao: ['Id Padrao', 'ID PADRAO', 'id_padrao', 'ID_PADRAO', 'ID_PDM', 'ID PDM'],
-    nome_valido: ['Nome Valido', 'NOME VALIDO', 'nome_valido', 'NOME_VALIDO', 'Nome_PDM', 'NOME_PDM', 'Nome PDM']
+    nome_valido: ['Nome Valido', 'NOME VALIDO', 'nome_valido', 'NOME_VALIDO', 'Nome_PDM', 'NOME_PDM', 'Nome PDM'],
+    dados_tecnicos: ['Dados Tecnicos', 'DADOS TECNICOS', 'dados_tecnicos', 'DADOS_TECNICOS']
   };
 
-  const detected = readWorkbookRowsByDetectedHeader(req.file.path, mapping);
+  const detected = readWorkbookRowsByDetectedHeader(req.file.path, {
+    id_padrao: mapping.id_padrao,
+    nome_valido: mapping.nome_valido
+  }, { sheetName: 'Resultado' });
   const rows = detected.rows;
   const columns = detected.columns;
   console.log('[import-pdms] colunas originais:', columns.original);
@@ -269,6 +355,8 @@ router.post('/import', async (req, res) => {
   let imported = 0;
   let ignored = 0;
   let totalAttributes = 0;
+  let withTechnicalData = 0;
+  let withoutTechnicalData = 0;
   const errors = [];
   const ignoredReasons = {};
   const pdmsToSave = [];
@@ -281,7 +369,7 @@ router.post('/import', async (req, res) => {
     }
 
     const mapped = mapRowFlexible(rawRow, mapping);
-    const attributes = [];
+    const attributes = attributesFromTechnicalData(mapped.dados_tecnicos);
 
     const row = normalizePdm({ ...mapped, ...actorPayload(actor) }, attributes);
     if (!row.id_pdm || !row.nome_pdm) {
@@ -294,12 +382,13 @@ router.post('/import', async (req, res) => {
 
     pdmsToSave.push(row);
     totalAttributes += attributes.length;
+    if (attributes.length) withTechnicalData += 1;
+    else withoutTechnicalData += 1;
     imported += 1;
   }
 
   try {
     await bulkUpsertPdms(pdmsToSave);
-    if (mode === 'replace') await db.prepare('DELETE FROM pdm_attributes').run();
   } catch (error) {
     return res.status(500).json({
       message: `Erro ao salvar base PDM: ${error.message}`,
@@ -322,6 +411,8 @@ router.post('/import', async (req, res) => {
     latest_pdm_imported_at: new Date().toISOString(),
     latest_pdm_count: savedCount,
     latest_pdm_attribute_count: savedAttributeCount,
+    latest_pdm_with_technical_data: withTechnicalData,
+    latest_pdm_without_technical_data: withoutTechnicalData,
     latest_pdm_file: req.file.originalname || ''
   });
   await addHistory({
@@ -336,13 +427,15 @@ router.post('/import', async (req, res) => {
   const previewRows = await db.prepare('SELECT * FROM pdms ORDER BY updated_at DESC LIMIT 10').all();
   const preview = previewRows.map((row) => {
     const attrs = parseAttrs(row);
-    return { id_padrao: row.id_padrao, nome_valido: row.nome_valido, attribute_count: attrs.length, attributes: attrs };
+    return { id_padrao: row.id_padrao, nome_valido: row.nome_valido, dados_tecnicos: row.dados_tecnicos, attribute_count: attrs.length, attributes: attrs };
   });
   const summary = {
     read: rows.length,
     imported,
     ignored,
     totalAttributes,
+    withTechnicalData,
+    withoutTechnicalData,
     ignoredReasons,
     errors,
     columns,

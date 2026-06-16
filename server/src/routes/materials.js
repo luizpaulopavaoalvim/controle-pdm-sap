@@ -76,7 +76,7 @@ async function upsertMaterialPayload(payload) {
       codigo, descricao, texto_longo_original, centro, deposito, tipo_material, fabricante, part_number,
       modelo, dimensao, material, aplicacao, observacao, suggested_pdm_id,
       suggested_pdm_name, confidence, suggestion_reason, status, responsible,
-      alternative_1, alternative_2, alternative_3, matched_words, doubtful_words, processing_ms,
+      alternative_1, alternative_2, alternative_3, matched_words, doubtful_words, technical_attributes, processing_ms,
       short_pt, long_pt, short_en, long_en, final_result,
       source_file, import_batch, row_number, import_order, import_error,
       modified_by_user_id, modified_by_name, modified_by_role
@@ -84,7 +84,7 @@ async function upsertMaterialPayload(payload) {
       @codigo, @descricao, @texto_longo_original, @centro, @deposito, @tipo_material, @fabricante, @part_number,
       @modelo, @dimensao, @material, @aplicacao, @observacao, @suggested_pdm_id,
       @suggested_pdm_name, @confidence, @suggestion_reason, @status, @responsible,
-      @alternative_1, @alternative_2, @alternative_3, @matched_words, @doubtful_words, @processing_ms,
+      @alternative_1, @alternative_2, @alternative_3, @matched_words, @doubtful_words, @technical_attributes, @processing_ms,
       @short_pt, @long_pt, @short_en, @long_en, @final_result,
       @source_file, @import_batch, @row_number, @import_order, @import_error,
       @modified_by_user_id, @modified_by_name, @modified_by_role
@@ -111,6 +111,7 @@ async function upsertMaterialPayload(payload) {
       alternative_3=excluded.alternative_3,
       matched_words=excluded.matched_words,
       doubtful_words=excluded.doubtful_words,
+      technical_attributes=excluded.technical_attributes,
       processing_ms=excluded.processing_ms,
       status=excluded.status,
       responsible=excluded.responsible,
@@ -143,7 +144,7 @@ async function bulkUpsertMaterialPayloads(payloads) {
     'codigo', 'descricao', 'texto_longo_original', 'centro', 'deposito', 'tipo_material', 'fabricante', 'part_number',
     'modelo', 'dimensao', 'material', 'aplicacao', 'observacao', 'suggested_pdm_id',
     'suggested_pdm_name', 'confidence', 'suggestion_reason', 'status', 'responsible',
-    'alternative_1', 'alternative_2', 'alternative_3', 'matched_words', 'doubtful_words', 'processing_ms',
+    'alternative_1', 'alternative_2', 'alternative_3', 'matched_words', 'doubtful_words', 'technical_attributes', 'processing_ms',
     'short_pt', 'long_pt', 'short_en', 'long_en', 'final_result',
     'source_file', 'import_batch', 'row_number', 'import_order', 'import_error',
     'modified_by_user_id', 'modified_by_name', 'modified_by_role'
@@ -185,6 +186,7 @@ async function bulkUpsertMaterialPayloads(payloads) {
         alternative_3=excluded.alternative_3,
         matched_words=excluded.matched_words,
         doubtful_words=excluded.doubtful_words,
+        technical_attributes=excluded.technical_attributes,
         processing_ms=excluded.processing_ms,
         status=excluded.status,
         responsible=excluded.responsible,
@@ -236,6 +238,7 @@ async function reprocessMaterialRow(row, actor, preparedPdms, req = null) {
       alternative_3=@alternative_3,
       matched_words=@matched_words,
       doubtful_words=@doubtful_words,
+      technical_attributes=@technical_attributes,
       processing_ms=@processing_ms,
       short_pt=@short_pt,
       long_pt=@long_pt,
@@ -362,7 +365,7 @@ router.put('/:id', async (req, res) => {
     'codigo', 'descricao', 'texto_longo_original', 'centro', 'deposito', 'tipo_material', 'fabricante', 'part_number',
     'modelo', 'dimensao', 'material', 'aplicacao', 'observacao', 'suggested_pdm_id', 'suggested_pdm_name',
     'confidence', 'suggestion_reason', 'alternative_1', 'alternative_2', 'alternative_3', 'matched_words', 'doubtful_words',
-    'processing_ms', 'status', 'responsible', 'short_pt', 'long_pt', 'short_en', 'long_en', 'final_result',
+    'technical_attributes', 'processing_ms', 'status', 'responsible', 'short_pt', 'long_pt', 'short_en', 'long_en', 'final_result',
     'source_file', 'import_batch', 'row_number', 'import_order', 'import_error',
     'modified_by_user_id', 'modified_by_name', 'modified_by_role'
   ];

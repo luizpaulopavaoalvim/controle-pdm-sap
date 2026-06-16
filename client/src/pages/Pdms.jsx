@@ -5,6 +5,7 @@ import { api } from '../services/api';
 const initial = {
   id_padrao: '',
   nome_valido: '',
+  dados_tecnicos: '',
   descricao_pdm: '',
   tipo_material: '',
   palavra_chave: '',
@@ -16,16 +17,17 @@ const initial = {
 };
 
 const labels = {
-  id_padrao: 'Id Padrão',
-  nome_valido: 'Nome Válido',
-  descricao_pdm: 'Descrição',
+  id_padrao: 'Id Padrao',
+  nome_valido: 'Nome Valido',
+  dados_tecnicos: 'Dados Tecnicos',
+  descricao_pdm: 'Descricao',
   tipo_material: 'Tipo de material',
   palavra_chave: 'Palavras-chave',
   estrutura_texto_breve_pt: 'Estrutura texto breve PT',
   estrutura_texto_longo_pt: 'Estrutura texto longo PT',
   estrutura_texto_breve_en: 'Estrutura texto breve EN',
   estrutura_texto_longo_en: 'Estrutura texto longo EN',
-  observacao: 'Observação'
+  observacao: 'Observacao'
 };
 
 export default function Pdms({ user }) {
@@ -55,6 +57,7 @@ export default function Pdms({ user }) {
     setForm({
       id_padrao: row.id_padrao || row.id_pdm || '',
       nome_valido: row.nome_valido || row.nome_pdm || '',
+      dados_tecnicos: row.dados_tecnicos || (row.attributes || []).map((attr) => attr.attribute_name).join(','),
       descricao_pdm: row.descricao_pdm || '',
       tipo_material: row.tipo_material || '',
       palavra_chave: row.palavra_chave || '',
@@ -69,13 +72,13 @@ export default function Pdms({ user }) {
 
   return (
     <>
-      <PageHeader title="Cadastro de PDM Manual" subtitle="Mantenha Id Padrão, Nome Válido e estruturas opcionais de geração." />
+      <PageHeader title="Cadastro de PDM Manual" subtitle="Mantenha Id Padrao, Nome Valido e Dados Tecnicos separados por virgula." />
       <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Object.keys(initial).map((field) => (
             <label key={field} className="text-sm font-bold text-slate-700">
               {labels[field]}
-              <textarea required={['id_padrao','nome_valido'].includes(field)} value={form[field]} onChange={(e) => setForm({ ...form, [field]: e.target.value })} className="mt-1 h-16 w-full rounded-md border border-slate-300 px-3 py-2 font-normal" />
+              <textarea required={['id_padrao', 'nome_valido'].includes(field)} value={form[field]} onChange={(e) => setForm({ ...form, [field]: e.target.value })} className="mt-1 h-16 w-full rounded-md border border-slate-300 px-3 py-2 font-normal" />
             </label>
           ))}
         </div>
@@ -90,12 +93,13 @@ export default function Pdms({ user }) {
       </div>
       <div className="table-wrap">
         <table className="min-w-full">
-          <thead><tr><th>Id Padrão</th><th>Nome Válido</th><th>Qtd. atributos</th><th>Atributos técnicos</th><th>Ações</th></tr></thead>
+          <thead><tr><th>Id Padrao</th><th>Nome Valido</th><th>Dados Tecnicos</th><th>Qtd. atributos</th><th>Atributos tecnicos</th><th>Acoes</th></tr></thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id}>
                 <td className="font-bold text-sap-blue">{row.id_padrao || row.id_pdm}</td>
                 <td>{row.nome_valido || row.nome_pdm}</td>
+                <td className="max-w-md text-xs">{row.dados_tecnicos || '-'}</td>
                 <td>{row.attribute_count || 0}</td>
                 <td>{(row.attributes || []).map((attr) => attr.attribute_name).join('; ')}</td>
                 <td><button onClick={() => edit(row)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">Editar</button></td>
@@ -103,7 +107,7 @@ export default function Pdms({ user }) {
             ))}
             {!rows.length && (
               <tr>
-                <td colSpan="5" className="py-10 text-center text-sm font-semibold text-slate-500">Nenhum PDM encontrado.</td>
+                <td colSpan="6" className="py-10 text-center text-sm font-semibold text-slate-500">Nenhum PDM encontrado.</td>
               </tr>
             )}
           </tbody>

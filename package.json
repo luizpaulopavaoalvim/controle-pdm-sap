@@ -11,6 +11,7 @@
     "qa:functional": "node scripts/functional-qa.mjs",
     "qa:login": "node scripts/qa-login-performance.mjs",
     "qa:transmitter": "node scripts/qa-transmitter-match.mjs",
+    "qa:pdm-dt": "node scripts/qa-pdm-technical-data.mjs",
     "qa:large": "node scripts/qa-large-import.mjs",
     "qa:pdm-simple": "node scripts/qa-pdm-simple-2772.mjs",
     "qa:import-flex": "node scripts/test-flex-material-import.mjs",

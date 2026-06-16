@@ -17,11 +17,14 @@ export default function UploadPanel({ title, description, onUpload, processingLa
       const result = await onUpload(file);
       if (typeof result.read === 'number') {
         const attrs = typeof result.totalAttributes === 'number' ? ` Atributos importados: ${result.totalAttributes}.` : '';
+        const technical = typeof result.withTechnicalData === 'number'
+          ? ` Com dados tecnicos: ${result.withTechnicalData}. Sem dados tecnicos: ${result.withoutTechnicalData || 0}.`
+          : '';
         const reasons = result.ignoredReasons && Object.keys(result.ignoredReasons).length
           ? ` Motivos: ${Object.entries(result.ignoredReasons).map(([reason, count]) => `${reason} (${count})`).join('; ')}.`
           : '';
         const errors = result.errors?.length ? ` Erros: ${result.errors.map((item) => typeof item === 'string' ? item : `linha ${item.row}: ${item.reason}`).slice(0, 5).join('; ')}.` : '';
-        setMessage(`Lidos: ${result.read}. Importados: ${result.imported || 0}. Ignorados: ${result.ignored || 0}.${attrs}${reasons}${errors}`);
+        setMessage(`Lidos: ${result.read}. Importados: ${result.imported || 0}. Ignorados: ${result.ignored || 0}.${attrs}${technical}${reasons}${errors}`);
       } else {
         setMessage(`${result.imported || 0} registros importados com sucesso.`);
       }
@@ -58,13 +61,14 @@ export default function UploadPanel({ title, description, onUpload, processingLa
         <div className="mt-5 overflow-auto rounded-md border border-slate-200">
           <table className="min-w-full">
             <thead>
-              <tr><th>Id Padrao</th><th>Nome Valido</th><th>Atributos</th><th>Lista de atributos tecnicos</th></tr>
+              <tr><th>Id Padrao</th><th>Nome Valido</th><th>Dados Tecnicos</th><th>Atributos</th><th>Lista de atributos tecnicos</th></tr>
             </thead>
             <tbody>
               {preview.map((row) => (
                 <tr key={`${row.id_padrao}-${row.nome_valido}`}>
                   <td className="font-bold text-sap-blue">{row.id_padrao}</td>
                   <td>{row.nome_valido}</td>
+                  <td className="max-w-md text-xs">{row.dados_tecnicos || '-'}</td>
                   <td>{row.attribute_count}</td>
                   <td>{(row.attributes || []).map((attr) => attr.attribute_name).join('; ')}</td>
                 </tr>

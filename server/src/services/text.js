@@ -66,10 +66,16 @@ export function translateTechnical(value = '') {
   return normalize(value)
     .replace(/\bATUADOR PNEUMATICO\b/g, 'PNEUMATIC ACTUATOR')
     .replace(/\bBOTA SEGURANCA\b/g, 'SAFETY BOOTS')
+    .replace(/\bBOTA BRIGADISTA\b/g, 'FIREMAN BOOTS')
     .replace(/\bTRANSMISSOR PRESSAO\b/g, 'PRESSURE TRANSMITTER')
     .replace(/\bVALVULA ESFERA\b/g, 'BALL VALVE')
     .replace(/\bROLAMENTO ESFERA\b/g, 'BALL BEARING')
     .replace(/\bFILTRO OLEO\b/g, 'OIL FILTER')
+    .replace(/\bMATERIAL CORPO\b/g, 'BODY MATERIAL')
+    .replace(/\bCOR CORPO\b/g, 'BODY COLOR')
+    .replace(/\bTAMANHO BOTA\b/g, 'BOOT SIZE')
+    .replace(/\bTIPO CANO\b/g, 'SHAFT TYPE')
+    .replace(/\bCARACTERISTICAS ADICIONAIS\b/g, 'ADDITIONAL FEATURES')
     .split(/\s+/)
     .map((word) => ptToEn[word] || word)
     .join(' ');
@@ -135,10 +141,26 @@ function extractTrailingValue(text, labels) {
   return '';
 }
 
+function extractLabeledValue(text, labels) {
+  const lines = String(text || '').split(/\r?\n|;/).map((line) => line.trim()).filter(Boolean);
+  const normalizedLabels = labels.map(normalize);
+  for (const line of lines) {
+    const match = line.match(/^\s*([^:]{2,80})\s*:\s*(.+?)\s*$/);
+    if (!match) continue;
+    const label = normalize(match[1]);
+    if (normalizedLabels.includes(label)) return normalize(match[2]).replace(/[;,.]$/, '');
+  }
+  return '';
+}
+
 function extractPartNumberAndManufacturer(material = {}) {
   const source = `${material.descricao || ''}; ${material.texto_longo_original || ''}`;
-  const partNumber = normalize(material.part_number || '') || extractTrailingValue(source, ['PART NUMBER', 'PARTNO', 'P/N', 'PN', 'MODELO']);
-  const manufacturer = normalize(material.fabricante || '') || extractTrailingValue(source, ['FABRICANTE', 'MANUFACTURER', 'MFR', 'FAB']);
+  const partNumber = normalize(material.part_number || '')
+    || extractLabeledValue(source, ['MANUFACTURER PART NUMBER', 'PART NUMBER', 'PARTNO', 'P/N', 'PN'])
+    || extractTrailingValue(source, ['PART NUMBER', 'PARTNO', 'P/N', 'PN', 'MODELO']);
+  const manufacturer = normalize(material.fabricante || '')
+    || extractLabeledValue(source, ['MANUFACTURER NAME', 'FABRICANTE', 'MANUFACTURER', 'MFR', 'FAB'])
+    || extractTrailingValue(source, ['FABRICANTE', 'MFR', 'FAB']);
   return { partNumber, manufacturer };
 }
 

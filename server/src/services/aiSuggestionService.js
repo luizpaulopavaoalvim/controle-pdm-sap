@@ -186,6 +186,10 @@ function parseAttributes(pdm = {}) {
   }
 }
 
+function formatTechnicalAttributes(pdm = {}) {
+  return parseAttributes(pdm).map((attr) => attr.attribute_name).filter(Boolean).join('; ');
+}
+
 export function preparePdmsForMatching(pdms = []) {
   const prepared = pdms.map((pdm) => {
     const pdmName = pdm.nome_valido || pdm.nome_pdm || '';
@@ -383,6 +387,13 @@ function scoreMaterial(material, pdm) {
     reasons.push('tipo de material compativel');
   }
 
+  const attributeTokens = (pdm._attributes || []).flatMap((attr) => tokenize(attr.attribute_name)).filter((term) => term.length > 2);
+  const attributeMatches = [...new Set(attributeTokens.filter((term) => tokens.has(term) && !secondaryTerms.has(term)))];
+  if (attributeMatches.length) {
+    points += Math.min(attributeMatches.length * 3, 15);
+    reasons.push(`Dados Tecnicos compativeis: ${attributeMatches.slice(0, 6).join(', ')}`);
+  }
+
   const matchedOnlySecondary = primaryEvidence === 0 && secondaryEvidence > 0;
   if (matchedOnlySecondary || (pdm._isSecondaryConcept && primaryEvidence === 0)) {
     points = Math.min(points, 41);
@@ -452,6 +463,7 @@ export async function suggestForMaterial(material, preparedPdms = null) {
       : 'Nenhum PDM razoavel encontrado; usado (NAO-PADRONIZADO)',
     matched_words: (pdm?.matchedWords || []).slice(0, 12).join(', '),
     doubtful_words: (pdm?.doubtfulWords || []).slice(0, 12).join(', '),
+    technical_attributes: pdm && String(pdm.id_pdm) !== '1' ? formatTechnicalAttributes(pdm) : '',
     alternative_1: formatAlternative(alternatives[0]),
     alternative_2: formatAlternative(alternatives[1]),
     alternative_3: formatAlternative(alternatives[2]),

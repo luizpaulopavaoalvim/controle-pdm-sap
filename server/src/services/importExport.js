@@ -45,59 +45,77 @@ export function mapRowFlexible(row, mapping) {
 
 export function readWorkbookRowsByDetectedHeader(path, mapping, { sheetName = null, maxHeaderScan = 20 } = {}) {
   const workbook = xlsx.readFile(path);
-  const selectedSheetName = sheetName && workbook.Sheets[sheetName] ? sheetName : workbook.SheetNames[0];
-  const sheet = workbook.Sheets[selectedSheetName];
-  const matrix = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '', blankrows: false });
   const normalizedAliases = Object.fromEntries(
     Object.entries(mapping).map(([target, aliases]) => [target, aliases.map(normalizeHeader)])
   );
 
-  let headerIndex = -1;
-  let headers = [];
-  for (let index = 0; index < Math.min(matrix.length, maxHeaderScan); index += 1) {
-    const candidate = matrix[index].map((cell) => String(cell ?? '').trim());
-    const normalizedCandidate = candidate.map(normalizeHeader);
-    const hasAllRequired = Object.values(normalizedAliases)
-      .every((aliases) => aliases.some((alias) => normalizedCandidate.includes(alias)));
-    if (hasAllRequired) {
-      headerIndex = index;
-      headers = candidate;
-      break;
+  function detectInSheet(selectedSheetName) {
+    const sheet = workbook.Sheets[selectedSheetName];
+    const matrix = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '', blankrows: false });
+    let headerIndex = -1;
+    let headers = [];
+    for (let index = 0; index < Math.min(matrix.length, maxHeaderScan); index += 1) {
+      const candidate = matrix[index].map((cell) => String(cell ?? '').trim());
+      const normalizedCandidate = candidate.map(normalizeHeader);
+      const hasAllRequired = Object.values(normalizedAliases)
+        .every((aliases) => aliases.some((alias) => normalizedCandidate.includes(alias)));
+      if (hasAllRequired) {
+        headerIndex = index;
+        headers = candidate;
+        break;
+      }
     }
-  }
 
-  if (headerIndex < 0) {
-    const firstRow = matrix[0] || [];
+    if (headerIndex < 0) {
+      const firstRow = matrix[0] || [];
+      return {
+        rows: [],
+        sheetName: selectedSheetName,
+        headerRowNumber: 0,
+        columns: {
+          original: firstRow.map((cell) => String(cell ?? '').trim()).filter(Boolean),
+          normalized: firstRow.map(normalizeHeader).filter(Boolean)
+        },
+        error: 'Cabecalho obrigatorio nao encontrado'
+      };
+    }
+
+    const rows = matrix.slice(headerIndex + 1).map((line) => {
+      const row = {};
+      headers.forEach((header, index) => {
+        const key = String(header ?? '').trim();
+        if (key) row[key] = line[index] ?? '';
+      });
+      return row;
+    });
+
     return {
-      rows: [],
+      rows,
       sheetName: selectedSheetName,
-      headerRowNumber: 0,
+      headerRowNumber: headerIndex + 1,
       columns: {
-        original: firstRow.map((cell) => String(cell ?? '').trim()).filter(Boolean),
-        normalized: firstRow.map(normalizeHeader).filter(Boolean)
+        original: headers.filter(Boolean),
+        normalized: headers.filter(Boolean).map(normalizeHeader)
       },
-      error: 'Cabecalho obrigatorio nao encontrado'
+      error: ''
     };
   }
 
-  const rows = matrix.slice(headerIndex + 1).map((line) => {
-    const row = {};
-    headers.forEach((header, index) => {
-      const key = String(header ?? '').trim();
-      if (key) row[key] = line[index] ?? '';
-    });
-    return row;
-  });
+  const preferred = sheetName && workbook.Sheets[sheetName] ? [sheetName] : [];
+  const candidates = [...preferred, ...workbook.SheetNames.filter((name) => !preferred.includes(name))];
+  let firstError = null;
+  for (const candidateSheetName of candidates) {
+    const detected = detectInSheet(candidateSheetName);
+    if (!detected.error) return detected;
+    if (!firstError) firstError = detected;
+  }
 
-  return {
-    rows,
-    sheetName: selectedSheetName,
-    headerRowNumber: headerIndex + 1,
-    columns: {
-      original: headers.filter(Boolean),
-      normalized: headers.filter(Boolean).map(normalizeHeader)
-    },
-    error: ''
+  return firstError || {
+    rows: [],
+    sheetName: '',
+    headerRowNumber: 0,
+    columns: { original: [], normalized: [] },
+    error: 'Cabecalho obrigatorio nao encontrado'
   };
 }
 

@@ -126,7 +126,7 @@ export default function Materials({ user, finalOnly = false }) {
               </tr>
             ) : (
               <tr>
-                <th>Codigo</th><th>Texto Breve Original</th><th>PDM Sugerido</th><th>ID PDM</th><th>Status</th><th>Confianca</th><th>Motivo</th><th>Palavras</th><th>Outras sugestoes possiveis</th><th>Responsavel</th><th>Observacao</th><th>Modificado por</th><th>Data</th><th>Texto Breve PT</th><th>Texto Longo PT</th><th>Texto Breve EN</th><th>Texto Longo EN</th><th>Acoes</th>
+                <th>Codigo</th><th>Texto Breve Original</th><th>PDM Sugerido</th><th>ID PDM</th><th>Status</th><th>Confianca</th><th>Motivo</th><th>Dados tecnicos usados</th><th>Palavras</th><th>Outras sugestoes possiveis</th><th>Responsavel</th><th>Observacao</th><th>Modificado por</th><th>Data</th><th>Texto Breve PT</th><th>Texto Longo PT</th><th>Texto Breve EN</th><th>Texto Longo EN</th><th>Acoes</th>
               </tr>
             )}
           </thead>
@@ -150,6 +150,7 @@ export default function Materials({ user, finalOnly = false }) {
                 <td><StatusBadge value={row.status} /></td>
                 <td>{row.confidence}%</td>
                 <td className="max-w-sm text-xs">{row.suggestion_reason}</td>
+                <td className="max-w-sm text-xs">{row.technical_attributes || '-'}</td>
                 <td className="max-w-xs text-xs">
                   <div><strong>Encontradas:</strong> {row.matched_words || '-'}</div>
                   <div><strong>Duvida:</strong> {row.doubtful_words || '-'}</div>
@@ -178,7 +179,7 @@ export default function Materials({ user, finalOnly = false }) {
             ))}
             {!rows.length && (
               <tr>
-                <td colSpan={finalOnly ? 7 : 18} className="py-10 text-center text-sm font-semibold text-slate-500">
+                <td colSpan={finalOnly ? 7 : 19} className="py-10 text-center text-sm font-semibold text-slate-500">
                   Nenhum material encontrado para os filtros selecionados.
                 </td>
               </tr>

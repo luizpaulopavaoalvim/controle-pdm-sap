@@ -18,7 +18,7 @@ export function ImportPdm({ user }) {
 
   return (
     <>
-      <PageHeader title="Importacao da Base de PDM" subtitle="Modelo esperado: Id Padrao | Nome Valido. Colunas extras serao ignoradas." />
+      <PageHeader title="Importacao da Base de PDM" subtitle="Modelo esperado: Id Padrao | Nome Valido | Dados Tecnicos. A aba Resultado sera priorizada." />
       <section className="mb-5 rounded-lg border border-slate-200 bg-white p-5 shadow-fiori">
         <div className="grid gap-4 md:grid-cols-3">
           <div>
@@ -32,6 +32,14 @@ export function ImportPdm({ user }) {
           <div>
             <div className="text-xs font-bold uppercase text-slate-500">Ultima importacao</div>
             <div className="mt-1 text-sm font-semibold text-slate-700">{status?.lastImportedAt || 'Ainda nao importado'}</div>
+          </div>
+          <div>
+            <div className="text-xs font-bold uppercase text-slate-500">Com dados tecnicos</div>
+            <div className="mt-1 text-lg font-bold text-sap-green">{status?.withTechnicalData || 0}</div>
+          </div>
+          <div>
+            <div className="text-xs font-bold uppercase text-slate-500">Sem estrutura tecnica</div>
+            <div className="mt-1 text-lg font-bold text-amber-700">{status?.withoutTechnicalData || 0}</div>
           </div>
         </div>
         {status?.count > 1 && (
@@ -49,7 +57,7 @@ export function ImportPdm({ user }) {
       </section>
       <UploadPanel
         title="Base de PDM"
-        description="O sistema usa automaticamente a primeira aba, incluindo Planilha1. Informe Id Padrao e Nome Valido; qualquer coluna extra sera ignorada."
+        description="O sistema prioriza a aba Resultado. Informe Id Padrao, Nome Valido e Dados Tecnicos separados por virgula; colunas extras serao ignoradas."
         onUpload={async (file) => {
           const form = new FormData();
           form.append('file', file);
